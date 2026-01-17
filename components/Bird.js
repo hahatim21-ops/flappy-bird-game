@@ -1,11 +1,11 @@
 import React from 'react';
-import { View, StyleSheet } from 'react-native';
+import { View, StyleSheet, Image, Platform } from 'react-native';
 
 /**
  * Bird Component
  * 
  * This component represents the player's bird in the game.
- * It's a simple colored rectangle that moves up and down based on velocity.
+ * It displays a bird image that moves up and down based on velocity.
  * 
  * Props:
  * - position: { x: number, y: number } - The position of the bird
@@ -15,7 +15,7 @@ const Bird = ({ position, size }) => {
   return (
     <View
       style={[
-        styles.bird,
+        styles.birdContainer,
         {
           width: size,
           height: size,
@@ -23,21 +23,26 @@ const Bird = ({ position, size }) => {
           top: position.y,
         },
       ]}
-    />
+    >
+      <Image
+        source={{ uri: 'https://www.pngall.com/wp-content/uploads/15/Flappy-Bird-PNG-Free-Image.png' }}
+        style={styles.birdImage}
+        resizeMode="contain"
+      />
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
-  bird: {
+  birdContainer: {
     position: 'absolute',
-    backgroundColor: '#FFD700', // Gold color for the bird
-    borderRadius: 5,
-    // Add a simple shadow effect
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 3,
-    elevation: 5, // For Android shadow
+    backgroundColor: 'transparent',
+    overflow: 'visible',
+  },
+  birdImage: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: 'transparent',
   },
 });
 
