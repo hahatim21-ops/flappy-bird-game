@@ -4,6 +4,10 @@ import { supabase } from './lib/supabase';
 import LoginScreen from './components/LoginScreen';
 import ProfileSetup from './components/ProfileSetup';
 import FlappyBirdGame from './FlappyBirdGame';
+import LobbyScreen from './components/LobbyScreen';
+import AvatarPicker from './components/AvatarPicker';
+import RoomScreen from './components/RoomScreen';
+import MultiplayerFlappyBirdGame from './components/MultiplayerFlappyBirdGame';
 
 // Import local penguin, flamingo, red, and mighty eagle avatars
 const penguinAvatar = require('./assets/penguin-avatar.png');
@@ -56,6 +60,12 @@ export default function App() {
   const [needsProfileSetup, setNeedsProfileSetup] = useState(false);
   const [showAvatarPicker, setShowAvatarPicker] = useState(false);
   const [savingAvatar, setSavingAvatar] = useState(false);
+  
+  // Multiplayer state
+  const [gameMode, setGameMode] = useState('single'); // 'single' or 'multiplayer'
+  const [multiplayerScreen, setMultiplayerScreen] = useState(null); // null, 'avatar', 'lobby', 'game'
+  const [currentRoom, setCurrentRoom] = useState(null);
+  const [isHost, setIsHost] = useState(false);
 
   // Load Google Fonts for pixelated text (web only)
   useEffect(() => {
@@ -261,10 +271,10 @@ export default function App() {
   }
 
   // Get player name (prefer player_name, then full_name, then email)
-  const playerName = user?.user_metadata?.player_name || 
-                     user?.user_metadata?.full_name || 
-                     user?.email?.split('@')[0] || 
-                     'Player';
+  const displayPlayerName = user?.user_metadata?.player_name || 
+                            user?.user_metadata?.full_name || 
+                            user?.email?.split('@')[0] || 
+                            'Player';
 
   // Get current avatar for display
   const currentAvatarId = user?.user_metadata?.avatar_id || 'bird';
@@ -272,6 +282,28 @@ export default function App() {
   const currentAvatarSource = currentAvatarData.isLocal 
     ? currentAvatarData.source 
     : { uri: currentAvatarData.url };
+
+  // Multiplayer handlers
+  const handleJoinRoom = (roomId, isHost) => {
+    setCurrentRoom({ id: roomId });
+    setIsHost(isHost);
+    setMultiplayerScreen('avatar'); // Go to Avatar Picker
+  };
+
+  const handleAvatarSelected = () => {
+    setMultiplayerScreen('lobby'); // Go to Room Screen (lobby)
+  };
+
+  const handleGameStart = () => {
+    setMultiplayerScreen('game'); // Go to MultiplayerFlappyBirdGame
+  };
+
+  const handleMultiplayerBack = () => {
+    setGameMode('single');
+    setMultiplayerScreen(null);
+    setCurrentRoom(null);
+    setIsHost(false);
+  };
 
   return (
     <>
@@ -293,8 +325,20 @@ export default function App() {
               <Text style={styles.changeAvatarText}>✏️</Text>
             </TouchableOpacity>
             <Text style={styles.userText}>
-              {playerName}
+              {displayPlayerName}
             </Text>
+            {gameMode === 'single' && (
+              <TouchableOpacity
+                style={styles.multiplayerButton}
+                onPress={() => {
+                  setGameMode('multiplayer');
+                  setMultiplayerScreen(null);
+                }}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.multiplayerButtonText}>🎮 Multiplayer</Text>
+              </TouchableOpacity>
+            )}
           </View>
           <TouchableOpacity 
             style={styles.logoutButton} 
@@ -309,11 +353,46 @@ export default function App() {
           </TouchableOpacity>
         </View>
 
-        {/* The game component */}
-        <FlappyBirdGame 
-          avatarUrl={user?.user_metadata?.avatar_url} 
-          avatarId={user?.user_metadata?.avatar_id || 'bird'} 
-        />
+        {/* Routing: Single-player or Multiplayer */}
+        {gameMode === 'single' && (
+          <FlappyBirdGame 
+            avatarUrl={user?.user_metadata?.avatar_url} 
+            avatarId={user?.user_metadata?.avatar_id || 'bird'} 
+          />
+        )}
+
+        {/* Multiplayer screens */}
+        {gameMode === 'multiplayer' && !multiplayerScreen && (
+          <LobbyScreen
+            onJoinRoom={handleJoinRoom}
+            onBack={handleMultiplayerBack}
+          />
+        )}
+
+        {gameMode === 'multiplayer' && multiplayerScreen === 'avatar' && currentRoom && (
+          <AvatarPicker
+            roomId={currentRoom.id}
+            onAvatarSelected={handleAvatarSelected}
+          />
+        )}
+
+        {gameMode === 'multiplayer' && multiplayerScreen === 'lobby' && currentRoom && (
+          <RoomScreen
+            roomId={currentRoom.id}
+            isHost={isHost}
+            onGameStart={handleGameStart}
+            onBack={handleMultiplayerBack}
+          />
+        )}
+
+        {gameMode === 'multiplayer' && multiplayerScreen === 'game' && currentRoom && user && (
+          <MultiplayerFlappyBirdGame
+            roomId={currentRoom.id}
+            localUserId={user.id}
+            onGameEnd={handleMultiplayerBack}
+            onBack={handleMultiplayerBack}
+          />
+        )}
 
         {/* Avatar Picker Modal */}
         <Modal
@@ -435,6 +514,19 @@ const styles = StyleSheet.create({
     textShadowColor: 'rgba(255, 255, 255, 0.8)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 2,
+    marginRight: 10,
+  },
+  multiplayerButton: {
+    backgroundColor: '#2196F3',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+    marginRight: 10,
+  },
+  multiplayerButtonText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '600',
   },
   logoutButton: {
     backgroundColor: '#DC3545',
