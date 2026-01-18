@@ -6,12 +6,14 @@ import { View, StyleSheet, Image, Platform } from 'react-native';
  * 
  * This component represents the player's bird in the game.
  * It displays a bird image that moves up and down based on velocity.
+ * The bird rotates based on velocity (downward when falling, upward when rising).
  * 
  * Props:
  * - position: { x: number, y: number } - The position of the bird
  * - size: number - The size (width/height) of the bird
+ * - rotation: number - Rotation angle in degrees (positive = rotate right/down, negative = rotate left/up)
  */
-const Bird = ({ position, size }) => {
+const Bird = ({ position, size, rotation = 0 }) => {
   return (
     <View
       style={[
@@ -21,6 +23,7 @@ const Bird = ({ position, size }) => {
           height: size,
           left: position.x,
           top: position.y,
+          transform: [{ rotate: `${rotation}deg` }],
         },
       ]}
     >

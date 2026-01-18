@@ -71,8 +71,10 @@ const FlappyBirdGame = () => {
     return 0; // Default to first image on first load
   };
 
-  // Game state management
-  const [gameState, setGameState] = useState('start'); // 'start', 'playing', 'gameOver'
+  // Game state management - Original Flappy Bird flow
+  // States: 'start', 'playing', 'hit', 'gameOver'
+  // Flow: READY → PLAYING → HIT → (falling) → GAME_OVER
+  const [gameState, setGameState] = useState('start'); // 'start', 'playing', 'hit', 'gameOver'
   const [birdPosition, setBirdPosition] = useState({ x: BIRD_START_X, y: screenHeight / 2 });
   const [birdVelocity, setBirdVelocity] = useState(0); // Vertical velocity of the bird
   const [pipes, setPipes] = useState([]); // Array of pipe objects
@@ -86,12 +88,68 @@ const FlappyBirdGame = () => {
   const lastPipeXRef = useRef(screenWidth); // Track the rightmost pipe position
   const gameStartTimeRef = useRef(null); // Track when game started playing
   const firstPipeSpawnedRef = useRef(false); // Track if first pipe has been spawned
+  const hasHitGroundRef = useRef(false); // Track if bird has hit ground (prevents multiple ground hit triggers)
+
+  // Sound refs
+  const wingSoundRef = useRef(null);
+  const pointSoundRef = useRef(null);
+  const dieSoundRef = useRef(null);
+  const hasPlayedDieSoundRef = useRef(false);
 
   // Calculate dynamic pipe gap (at least 180px or 28% of screen height, whichever is larger)
   const PIPE_GAP = Math.max(180, screenHeight * 0.28);
   
   // Calculate dynamic pipe spacing (15% of screen width)
   const PIPE_SPACING = screenWidth * 0.15;
+
+  /**
+   * Initialize sounds - load audio files on component mount
+   */
+  useEffect(() => {
+    if (typeof window === 'undefined' || Platform.OS !== 'web') return;
+
+    // For web: use require() to get bundled asset paths
+    const loadSound = async (ref, assetModule) => {
+      try {
+        // Get the resolved URI from the asset
+        const resolved = assetModule;
+        ref.current = new Audio(resolved);
+        ref.current.preload = 'auto';
+        ref.current.volume = 0.5;
+        ref.current.load();
+        console.log('Sound loaded:', resolved);
+      } catch (e) {
+        console.log('Could not load sound:', e);
+      }
+    };
+
+    // Load sounds using require (bundled by webpack)
+    loadSound(wingSoundRef, require('./assets/sounds/flappy-birds-wing.mp3'));
+    loadSound(pointSoundRef, require('./assets/sounds/flappy-birds-point.mp3'));
+    loadSound(dieSoundRef, require('./assets/sounds/flappy-birds-die.mp3'));
+
+    // Cleanup
+    return () => {
+      [wingSoundRef, pointSoundRef, dieSoundRef].forEach(ref => {
+        if (ref.current) {
+          ref.current.pause();
+          ref.current = null;
+        }
+      });
+    };
+  }, []);
+
+  /**
+   * Play a sound (with overlap prevention)
+   */
+  const playSound = useCallback((soundRef) => {
+    if (soundRef.current) {
+      try {
+        soundRef.current.currentTime = 0;
+        soundRef.current.play().catch(() => {});
+      } catch (e) {}
+    }
+  }, []);
 
   /**
    * Initialize the game - reset all values to starting state
@@ -106,6 +164,8 @@ const FlappyBirdGame = () => {
     gameStartTimeRef.current = null;
     firstPipeSpawnedRef.current = false;
     setBackgroundScrollX(0); // Reset background scroll
+    hasHitGroundRef.current = false; // Reset ground hit flag
+    hasPlayedDieSoundRef.current = false; // Reset die sound flag
     setGameState('start');
   }, [screenHeight, screenWidth]);
 
@@ -163,15 +223,23 @@ const FlappyBirdGame = () => {
   const handleFlap = useCallback(() => {
     if (gameState === 'start') {
       startGame();
+      return;
     } else if (gameState === 'playing') {
+      // Input is enabled during 'playing' state only
       // Apply upward force to the bird
       setBirdVelocity(FLAP_STRENGTH);
+      // Play wing flap sound
+      playSound(wingSoundRef);
+    } else if (gameState === 'hit') {
+      // Input disabled during 'hit' state (bird falling after collision)
+      // Do nothing - player cannot control bird after collision
+      return;
     } else if (gameState === 'gameOver') {
       // Restart game if tapping during game over
       initGame();
       startGame();
     }
-  }, [gameState, startGame, initGame]);
+  }, [gameState, startGame, initGame, playSound]);
 
   /**
    * Generate a new pipe at the right edge of the screen
@@ -267,14 +335,19 @@ const FlappyBirdGame = () => {
    * - Updates score when bird passes pipes
    */
   const gameLoop = useCallback(() => {
-    if (gameState !== 'playing') {
+    // Game loop runs during 'playing' and 'hit' states (bird falling after collision)
+    if (gameState !== 'playing' && gameState !== 'hit') {
       return;
     }
 
-    // Update background scroll position (continuous scrolling)
-    setBackgroundScrollX((prevScroll) => prevScroll + BACKGROUND_SPEED);
+    const isInHitState = gameState === 'hit';
 
-    // Update bird velocity (apply gravity)
+    // Update background scroll position (continuous scrolling - stop in hit state)
+    if (!isInHitState) {
+      setBackgroundScrollX((prevScroll) => prevScroll + BACKGROUND_SPEED);
+    }
+
+    // Update bird velocity (apply gravity - ALWAYS, even in hit state)
     setBirdVelocity((prevVel) => {
       const newVelocity = prevVel + GRAVITY;
       
@@ -282,7 +355,45 @@ const FlappyBirdGame = () => {
       setBirdPosition((prevPos) => {
         const newY = prevPos.y + newVelocity;
 
-        // Update pipes
+        // Check for screen boundary collisions (only in 'playing' state)
+        if (!isInHitState) {
+          const collisionY = newY + BIRD_COLLISION_OFFSET;
+          // Check if bird hits top or bottom of screen
+          if (collisionY <= 0 || collisionY + BIRD_COLLISION_SIZE >= screenHeight) {
+            // Bird hit screen boundary - transition to HIT state
+            setGameState('hit');
+            // Play die sound (only once)
+            if (!hasPlayedDieSoundRef.current && dieSoundRef.current) {
+              hasPlayedDieSoundRef.current = true;
+              dieSoundRef.current.currentTime = 0;
+              dieSoundRef.current.play().catch(() => {});
+            }
+            
+            // In hit state: stop pipe updates (pipes don't move)
+            return { ...prevPos, y: newY };
+          }
+        }
+        
+        // In HIT state: Check if bird hits ground, then wait 500ms before showing scoreboard
+        if (isInHitState) {
+          const birdBottom = newY + BIRD_COLLISION_OFFSET + BIRD_COLLISION_SIZE;
+          const groundLevel = screenHeight - 50; // Approximate ground level
+          
+          // Check if bird has hit the ground (only trigger once)
+          if (birdBottom >= groundLevel && !hasHitGroundRef.current) {
+            hasHitGroundRef.current = true; // Mark as hit ground to prevent retriggering
+            
+            // Bird hit ground - wait 500ms then show scoreboard
+            setTimeout(() => {
+              setGameState('gameOver');
+            }, 500);
+          }
+          
+          // In hit state: stop pipe updates (pipes don't move)
+          return { ...prevPos, y: newY };
+        }
+
+        // Update pipes (only in 'playing' state, not in 'hit' state)
         setPipes((prevPipes) => {
           let newPipes = prevPipes.map((pipe) => {
             // Move pipe left
@@ -293,6 +404,11 @@ const FlappyBirdGame = () => {
             if (!passed && pipe.x + PIPE_WIDTH < prevPos.x) {
               passed = true;
               setScore((prevScore) => prevScore + 1);
+              // Play point sound
+              if (pointSoundRef.current) {
+                pointSoundRef.current.currentTime = 0;
+                pointSoundRef.current.play().catch(() => {});
+              }
             }
 
             return { ...pipe, x: newX, passed };
@@ -330,7 +446,7 @@ const FlappyBirdGame = () => {
             // Spawn new pipe at exactly pipeSpacing distance from the rightmost pipe
             // This ensures equal spacing between all pipes (same as initial pipes)
             const newPipeX = rightmostPipe + pipeSpacing;
-            
+
             newPipes.push({
               id: nextPipeId,
               x: newPipeX,
@@ -340,9 +456,18 @@ const FlappyBirdGame = () => {
             setNextPipeId((prevId) => prevId + 1);
           }
 
-          // Check for collisions with updated pipes
-          if (checkCollision({ x: prevPos.x, y: newY }, newPipes)) {
-            setGameState('gameOver');
+          // Check for collisions with updated pipes (only in 'playing' state)
+          if (!isInHitState && checkCollision({ x: prevPos.x, y: newY }, newPipes)) {
+            // Bird hit pillar - transition to HIT state (not gameOver yet)
+            // In HIT state: pipes stop, bird continues falling
+            setGameState('hit');
+            // Play die sound (only once)
+            if (!hasPlayedDieSoundRef.current && dieSoundRef.current) {
+              hasPlayedDieSoundRef.current = true;
+              dieSoundRef.current.currentTime = 0;
+              dieSoundRef.current.play().catch(() => {});
+            }
+            
             return newPipes;
           }
 
@@ -360,10 +485,10 @@ const FlappyBirdGame = () => {
   }, [gameState, screenWidth, screenHeight, checkCollision, nextPipeId]);
 
   /**
-   * Start the game loop when game state changes to 'playing'
+   * Start the game loop when game state changes to 'playing' or 'hit'
    */
   useEffect(() => {
-    if (gameState === 'playing') {
+    if (gameState === 'playing' || gameState === 'hit') {
       gameLoopRef.current = requestAnimationFrame(gameLoop);
     } else {
       // Stop the game loop
@@ -380,11 +505,6 @@ const FlappyBirdGame = () => {
       }
     };
   }, [gameState, gameLoop]);
-
-  /**
-   * Pipes are now generated in the gameLoop with a 2.5 second delay
-   * This useEffect is removed to prevent immediate pipe spawning
-   */
 
   /**
    * Add keyboard support for SPACE key
@@ -432,7 +552,7 @@ const FlappyBirdGame = () => {
     const currentImage = imageSources[startScreenImageIndex];
 
     return (
-      <View style={styles.startScreen}>
+    <View style={styles.startScreen}>
         <Image
           source={currentImage}
           style={styles.titleImage}
@@ -441,8 +561,8 @@ const FlappyBirdGame = () => {
         <View style={styles.instructionOverlay}>
           <Text style={styles.startInstruction}>Tap anywhere or press SPACE to start!</Text>
         </View>
-      </View>
-    );
+    </View>
+  );
   };
 
   /**
@@ -458,8 +578,8 @@ const FlappyBirdGame = () => {
       <View style={styles.container}>
         <StatusBar hidden />
         
-        {/* Scrolling background (parallax effect) - show during playing and gameOver */}
-        {(gameState === 'playing' || gameState === 'gameOver') && (
+        {/* Scrolling background (parallax effect) - show during playing, hit, and gameOver */}
+        {(gameState === 'playing' || gameState === 'hit' || gameState === 'gameOver') && (
           <Background scrollX={backgroundScrollX} gameState={gameState} />
         )}
         
@@ -478,9 +598,14 @@ const FlappyBirdGame = () => {
           />
         ))}
 
-        {/* Render bird - always visible during gameplay and game over */}
-        {(gameState === 'playing' || gameState === 'gameOver') && (
-          <Bird position={birdPosition} size={BIRD_SIZE} />
+        {/* Render bird - visible during gameplay, hit state (falling), and game over */}
+        {/* Bird rotation: positive velocity (falling) = rotate down, negative velocity (rising) = rotate up */}
+        {(gameState === 'playing' || gameState === 'hit' || gameState === 'gameOver') && (
+          <Bird 
+            position={birdPosition} 
+            size={BIRD_SIZE}
+            rotation={Math.min(Math.max(birdVelocity * 5, -30), 90)} // Clamp rotation between -30° (max up) and 90° (max down)
+          />
         )}
 
         {/* Render score (only during gameplay) */}
