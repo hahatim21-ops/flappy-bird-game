@@ -46,7 +46,7 @@ const FIRST_PIPE_DELAY = 500; // Delay before first pipe appears (milliseconds)
 const MIN_TOP_PIPE_HEIGHT = 60; // Minimum height of top pipe (pixels)
 const MIN_BOTTOM_PIPE_HEIGHT = 60; // Minimum height of bottom pipe (pixels)
 
-const FlappyBirdGame = () => {
+const FlappyBirdGame = ({ avatarUrl, avatarId = 'bird' }) => {
   // Get screen dimensions for responsive design
   const screenData = Dimensions.get('window');
   const screenWidth = screenData.width;
@@ -603,8 +603,15 @@ const FlappyBirdGame = () => {
         {(gameState === 'playing' || gameState === 'hit' || gameState === 'gameOver') && (
           <Bird 
             position={birdPosition} 
-            size={BIRD_SIZE}
+            size={
+              avatarId === 'penguin' ? 120 :
+              avatarId === 'flamingo' ? 80 :
+              avatarId === 'red' ? 60 :
+              avatarId === 'mighty-eagle' ? 140 :
+              BIRD_SIZE
+            }
             rotation={Math.min(Math.max(birdVelocity * 5, -30), 90)} // Clamp rotation between -30° (max up) and 90° (max down)
+            avatarUrl={avatarUrl}
           />
         )}
 

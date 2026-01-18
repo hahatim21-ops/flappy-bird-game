@@ -1,15 +1,61 @@
 import React, { useEffect, useState } from 'react';
-import { View, ActivityIndicator, Text, StyleSheet, TouchableOpacity, StatusBar, Platform } from 'react-native';
+import { View, ActivityIndicator, Text, StyleSheet, TouchableOpacity, StatusBar, Platform, Modal, Image } from 'react-native';
 import { supabase } from './lib/supabase';
 import LoginScreen from './components/LoginScreen';
 import ProfileSetup from './components/ProfileSetup';
 import FlappyBirdGame from './FlappyBirdGame';
+
+// Import local penguin, flamingo, red, and mighty eagle avatars
+const penguinAvatar = require('./assets/penguin-avatar.png');
+const flamingoAvatar = require('./assets/flamingo-avatar.png');
+const redAvatar = require('./assets/red-avatar.png');
+const mightyEagleAvatar = require('./assets/mighty-eagle-avatar.png');
+
+// Avatar options (same as in ProfileSetup)
+const AVATAR_OPTIONS = [
+  {
+    id: 'bird',
+    name: 'Flappy Bird',
+    url: 'https://www.pngall.com/wp-content/uploads/15/Flappy-Bird-PNG-Free-Image.png',
+    isLocal: false,
+  },
+  {
+    id: 'red',
+    name: 'Red',
+    source: redAvatar,
+    isLocal: true,
+    url: redAvatar, // For saving to database, webpack will resolve this
+  },
+  {
+    id: 'penguin',
+    name: 'Penguin',
+    source: penguinAvatar,
+    isLocal: true,
+    url: penguinAvatar, // For saving to database, webpack will resolve this
+  },
+  {
+    id: 'flamingo',
+    name: 'Flamingo',
+    source: flamingoAvatar,
+    isLocal: true,
+    url: flamingoAvatar, // For saving to database, webpack will resolve this
+  },
+  {
+    id: 'mighty-eagle',
+    name: 'Mighty Eagle',
+    source: mightyEagleAvatar,
+    isLocal: true,
+    url: mightyEagleAvatar, // For saving to database, webpack will resolve this
+  },
+];
 
 export default function App() {
   const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState(null);
   const [needsProfileSetup, setNeedsProfileSetup] = useState(false);
+  const [showAvatarPicker, setShowAvatarPicker] = useState(false);
+  const [savingAvatar, setSavingAvatar] = useState(false);
 
   // Load Google Fonts for pixelated text (web only)
   useEffect(() => {
@@ -141,6 +187,43 @@ export default function App() {
     }
   };
 
+  const handleAvatarChange = async (avatarId) => {
+    try {
+      setSavingAvatar(true);
+      const avatarData = AVATAR_OPTIONS.find(a => a.id === avatarId);
+      
+      // For local assets, get the resolved URL from webpack
+      let avatarUrl = avatarData?.url;
+      if (avatarData?.isLocal && avatarData?.source) {
+        // In webpack, require() returns an object with default or the URL directly
+        avatarUrl = typeof avatarData.source === 'string' 
+          ? avatarData.source 
+          : (avatarData.source.default || avatarData.source);
+      }
+      
+      const { error: updateError } = await supabase.auth.updateUser({
+        data: {
+          avatar_id: avatarId,
+          avatar_url: avatarUrl || AVATAR_OPTIONS[0].url,
+        }
+      });
+
+      if (updateError) {
+        console.error('Error updating avatar:', updateError);
+      } else {
+        // Refresh user data
+        const { data: { user: refreshedUser } } = await supabase.auth.getUser();
+        setUser(refreshedUser);
+      }
+      
+      setSavingAvatar(false);
+      setShowAvatarPicker(false);
+    } catch (err) {
+      console.error('Error changing avatar:', err);
+      setSavingAvatar(false);
+    }
+  };
+
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -183,15 +266,36 @@ export default function App() {
                      user?.email?.split('@')[0] || 
                      'Player';
 
+  // Get current avatar for display
+  const currentAvatarId = user?.user_metadata?.avatar_id || 'bird';
+  const currentAvatarData = AVATAR_OPTIONS.find(a => a.id === currentAvatarId) || AVATAR_OPTIONS[0];
+  const currentAvatarSource = currentAvatarData.isLocal 
+    ? currentAvatarData.source 
+    : { uri: currentAvatarData.url };
+
   return (
     <>
       <StatusBar hidden />
       <View style={styles.gameContainer}>
         {/* User info and logout button - improved styling */}
         <View style={styles.userBar} pointerEvents="box-none">
-          <Text style={styles.userText}>
-            Welcome, {playerName}!
-          </Text>
+          <View style={styles.userInfo}>
+            <TouchableOpacity 
+              style={styles.avatarButton}
+              onPress={() => setShowAvatarPicker(true)}
+              activeOpacity={0.7}
+            >
+              <Image 
+                source={currentAvatarSource} 
+                style={styles.avatarPreview}
+                resizeMode="contain"
+              />
+              <Text style={styles.changeAvatarText}>✏️</Text>
+            </TouchableOpacity>
+            <Text style={styles.userText}>
+              {playerName}
+            </Text>
+          </View>
           <TouchableOpacity 
             style={styles.logoutButton} 
             onPress={() => {
@@ -200,15 +304,67 @@ export default function App() {
             }}
             activeOpacity={0.7}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            onPressIn={() => console.log('Logout button pressed in')}
-            onPressOut={() => console.log('Logout button pressed out')}
           >
             <Text style={styles.logoutText}>Logout</Text>
           </TouchableOpacity>
         </View>
 
         {/* The game component */}
-        <FlappyBirdGame />
+        <FlappyBirdGame 
+          avatarUrl={user?.user_metadata?.avatar_url} 
+          avatarId={user?.user_metadata?.avatar_id || 'bird'} 
+        />
+
+        {/* Avatar Picker Modal */}
+        <Modal
+          visible={showAvatarPicker}
+          transparent={true}
+          animationType="fade"
+          onRequestClose={() => setShowAvatarPicker(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <Text style={styles.modalTitle}>Choose Your Bird</Text>
+              
+              <View style={styles.avatarGrid}>
+                {AVATAR_OPTIONS.map((avatar) => (
+                  <TouchableOpacity
+                    key={avatar.id}
+                    style={[
+                      styles.avatarOption,
+                      currentAvatarId === avatar.id && styles.avatarOptionSelected,
+                    ]}
+                    onPress={() => handleAvatarChange(avatar.id)}
+                    disabled={savingAvatar}
+                  >
+                    <Image
+                      source={avatar.isLocal ? avatar.source : { uri: avatar.url }}
+                      style={styles.avatarImage}
+                      resizeMode="contain"
+                    />
+                    <Text style={[
+                      styles.avatarName,
+                      currentAvatarId === avatar.id && styles.avatarNameSelected,
+                    ]}>
+                      {avatar.name}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              {savingAvatar && (
+                <ActivityIndicator size="small" color="#4CAF50" style={{ marginTop: 10 }} />
+              )}
+
+              <TouchableOpacity
+                style={styles.closeButton}
+                onPress={() => setShowAvatarPicker(false)}
+              >
+                <Text style={styles.closeButtonText}>Close</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
       </View>
     </>
   );
@@ -228,7 +384,7 @@ const styles = StyleSheet.create({
   },
   gameContainer: {
     flex: 1,
-    zIndex: 1, // Lower than user bar
+    zIndex: 1,
   },
   userBar: {
     position: 'absolute',
@@ -241,14 +397,40 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 50,
     paddingBottom: 10,
-    backgroundColor: 'transparent', // Removed white background bar
-    zIndex: 10000, // Very high z-index to ensure it's above everything
-    pointerEvents: 'box-none', // Allow touches to pass through container but catch on buttons
-    elevation: 10, // For Android
+    backgroundColor: 'transparent',
+    zIndex: 10000,
+    pointerEvents: 'box-none',
+    elevation: 10,
+  },
+  userInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    pointerEvents: 'auto',
+  },
+  avatarButton: {
+    position: 'relative',
+    marginRight: 10,
+  },
+  avatarPreview: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 2,
+    borderColor: '#4CAF50',
+  },
+  changeAvatarText: {
+    position: 'absolute',
+    bottom: -2,
+    right: -2,
+    fontSize: 12,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 8,
+    padding: 2,
   },
   userText: {
     fontSize: 15,
-    color: '#000000', // Black color
+    color: '#000000',
     fontWeight: '600',
     textShadowColor: 'rgba(255, 255, 255, 0.8)',
     textShadowOffset: { width: 0, height: 1 },
@@ -262,13 +444,81 @@ const styles = StyleSheet.create({
     minWidth: 80,
     alignItems: 'center',
     justifyContent: 'center',
-    zIndex: 10001, // Very high z-index to ensure it's clickable
-    pointerEvents: 'auto', // Ensure button can receive touches
-    elevation: 11, // For Android
+    zIndex: 10001,
+    pointerEvents: 'auto',
+    elevation: 11,
   },
   logoutText: {
     color: '#FFFFFF',
     fontSize: 14,
+    fontWeight: '600',
+  },
+  // Modal styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 24,
+    alignItems: 'center',
+    minWidth: 320,
+    maxWidth: 400,
+  },
+  modalTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#333333',
+    marginBottom: 20,
+  },
+  avatarGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: 12,
+    marginBottom: 20,
+  },
+  avatarOption: {
+    alignItems: 'center',
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 3,
+    borderColor: '#E0E0E0',
+    backgroundColor: '#F9F9F9',
+    width: 90,
+  },
+  avatarOptionSelected: {
+    borderColor: '#4CAF50',
+    backgroundColor: '#E8F5E9',
+  },
+  avatarImage: {
+    width: 60,
+    height: 60,
+    marginBottom: 8,
+    backgroundColor: 'transparent',
+  },
+  avatarName: {
+    fontSize: 11,
+    color: '#666666',
+    fontWeight: '500',
+    textAlign: 'center',
+  },
+  avatarNameSelected: {
+    color: '#4CAF50',
+    fontWeight: '700',
+  },
+  closeButton: {
+    backgroundColor: '#666666',
+    paddingHorizontal: 30,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  closeButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
     fontWeight: '600',
   },
 });

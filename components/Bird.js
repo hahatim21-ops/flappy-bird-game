@@ -1,6 +1,9 @@
 import React from 'react';
 import { View, StyleSheet, Image, Platform } from 'react-native';
 
+// Default bird image (classic Flappy Bird)
+const DEFAULT_BIRD_URL = 'https://www.pngall.com/wp-content/uploads/15/Flappy-Bird-PNG-Free-Image.png';
+
 /**
  * Bird Component
  * 
@@ -12,8 +15,11 @@ import { View, StyleSheet, Image, Platform } from 'react-native';
  * - position: { x: number, y: number } - The position of the bird
  * - size: number - The size (width/height) of the bird
  * - rotation: number - Rotation angle in degrees (positive = rotate right/down, negative = rotate left/up)
+ * - avatarUrl: string - URL of the avatar image to display (optional, defaults to classic bird)
  */
-const Bird = ({ position, size, rotation = 0 }) => {
+const Bird = ({ position, size, rotation = 0, avatarUrl }) => {
+  const imageUrl = avatarUrl || DEFAULT_BIRD_URL;
+  
   return (
     <View
       style={[
@@ -28,7 +34,7 @@ const Bird = ({ position, size, rotation = 0 }) => {
       ]}
     >
       <Image
-        source={{ uri: 'https://www.pngall.com/wp-content/uploads/15/Flappy-Bird-PNG-Free-Image.png' }}
+        source={{ uri: imageUrl }}
         style={styles.birdImage}
         resizeMode="contain"
       />

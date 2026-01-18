@@ -1,6 +1,7 @@
 const createExpoWebpackConfigAsync = require('@expo/webpack-config');
 const Dotenv = require('dotenv-webpack');
 const path = require('path');
+const CopyWebpackPlugin = require('copy-webpack-plugin');
 
 module.exports = async function (env, argv) {
   const config = await createExpoWebpackConfigAsync(env, argv);
@@ -12,6 +13,19 @@ module.exports = async function (env, argv) {
       safe: false, // Don't require .env.example
       systemvars: true, // Load system environment variables
       silent: false, // Show warnings
+    })
+  );
+
+  // Copy penguin avatar from public folder
+  config.plugins.push(
+    new CopyWebpackPlugin({
+      patterns: [
+        {
+          from: path.resolve(__dirname, 'public/penguin-avatar.png'),
+          to: 'penguin-avatar.png',
+          noErrorOnMissing: true,
+        },
+      ],
     })
   );
 

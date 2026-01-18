@@ -39,11 +39,12 @@ const Background = ({ scrollX, gameState }) => {
   const previousGameStateRef = useRef(gameState);
   const hasRotatedRef = useRef(false); // Track if we've already rotated for this gameOver
   
-  // Rotate background when game ends (transitions from 'playing' to 'gameOver')
+  // Rotate background when game ends (transitions from 'hit' to 'gameOver')
   useEffect(() => {
     // Only rotate when transitioning TO 'gameOver' state (game just ended)
+    // Game flow: 'playing' → 'hit' → 'gameOver', so previous state is 'hit'
     // And we haven't already rotated for this gameOver
-    if (gameState === 'gameOver' && previousGameStateRef.current === 'playing' && !hasRotatedRef.current) {
+    if (gameState === 'gameOver' && previousGameStateRef.current === 'hit' && !hasRotatedRef.current) {
       // Rotate to next image when game ends
       setCurrentImageIndex((prevIndex) => {
         const newIndex = (prevIndex + 1) % backgroundImages.length;
