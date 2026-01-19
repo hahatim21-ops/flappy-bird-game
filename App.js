@@ -291,9 +291,8 @@ export default function App() {
     : { uri: currentAvatarData.url };
 
   // Multiplayer handlers
-  const handleJoinRoom = (room, isHost) => {
-    // room: { id, code }
-    setCurrentRoom(room);
+  const handleJoinRoom = (roomId, isHost) => {
+    setCurrentRoom({ id: roomId });
     setIsHost(isHost);
     setMultiplayerScreen('avatar'); // Go to Avatar Picker
   };
@@ -315,79 +314,6 @@ export default function App() {
     setShowGame(true);
     setShowDifficultySelector(false);
   };
-
-  // --- Invite link auto-join support (web) ---
-  useEffect(() => {
-    if (!session || !user || needsProfileSetup) return;
-    if (typeof window === 'undefined') return;
-
-    const params = new URLSearchParams(window.location.search);
-    const roomCode = (params.get('room') || '').toUpperCase().trim();
-    if (!roomCode || roomCode.length !== 6) return;
-
-    let cancelled = false;
-
-    const joinByCode = async () => {
-      try {
-        // Find room by code (prefer waiting rooms)
-        const { data: rooms, error: roomError } = await supabase
-          .from('rooms')
-          .select('*')
-          .eq('code', roomCode)
-          .limit(1);
-
-        if (roomError) throw roomError;
-        if (!rooms || rooms.length === 0) return;
-
-        const room = rooms[0];
-
-        // Ensure player exists in room_players (idempotent)
-        const { data: existingPlayer, error: existingError } = await supabase
-          .from('room_players')
-          .select('id')
-          .eq('room_id', room.id)
-          .eq('user_id', user.id)
-          .limit(1);
-
-        if (existingError) {
-          // Non-fatal; still attempt insert
-          console.warn('Could not check existing player:', existingError);
-        }
-
-        if (!existingPlayer || existingPlayer.length === 0) {
-          await supabase.from('room_players').insert({
-            room_id: room.id,
-            user_id: user.id,
-            avatar: 'yellow',
-            score: 0,
-            is_alive: true,
-          });
-        }
-
-        if (cancelled) return;
-
-        // Navigate to multiplayer avatar picker
-        setGameMode('multiplayer');
-        setMultiplayerScreen('avatar');
-        setCurrentRoom({ id: room.id, code: room.code });
-        setIsHost(room.host_user_id === user.id);
-
-        // Remove the param so refresh doesn't re-run join
-        try {
-          const newUrl = `${window.location.origin}${window.location.pathname}`;
-          window.history.replaceState({}, '', newUrl);
-        } catch {}
-      } catch (e) {
-        console.warn('Auto-join by invite link failed:', e?.message || e);
-      }
-    };
-
-    joinByCode();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [session, user, needsProfileSetup]);
 
   return (
     <>
@@ -491,7 +417,6 @@ export default function App() {
         {gameMode === 'multiplayer' && multiplayerScreen === 'avatar' && currentRoom && (
           <AvatarPicker
             roomId={currentRoom.id}
-            roomCode={currentRoom.code}
             onAvatarSelected={handleAvatarSelected}
           />
         )}

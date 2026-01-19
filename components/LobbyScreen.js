@@ -112,7 +112,7 @@ const LobbyScreen = ({ onJoinRoom, onBack }) => {
       }
 
       // Navigate to Avatar Picker
-      onJoinRoom({ id: room.id, code: room.code }, true); // true = is host
+      onJoinRoom(room.id, true); // true = is host
 
     } catch (error) {
       console.error('Error creating room:', error);
@@ -195,7 +195,7 @@ const LobbyScreen = ({ onJoinRoom, onBack }) => {
         // Already in room, go to avatar picker
         // Host is determined by host_user_id from room
         const isHost = room.host_user_id === user.id;
-        onJoinRoom({ id: room.id, code: room.code }, isHost);
+        onJoinRoom(room.id, isHost);
         return;
       }
 
@@ -220,7 +220,7 @@ const LobbyScreen = ({ onJoinRoom, onBack }) => {
       // Navigate to Avatar Picker
       // Host is determined by host_user_id from room
       const isHost = room.host_user_id === user.id;
-      onJoinRoom({ id: room.id, code: room.code }, isHost);
+      onJoinRoom(room.id, isHost);
 
     } catch (error) {
       console.error('Error joining room:', error);
