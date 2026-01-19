@@ -60,6 +60,8 @@ const MultiplayerFlappyBirdGame = ({ roomId, localUserId, onGameEnd, onBack }) =
   const [localScore, setLocalScore] = useState(0);
   const [localBirdY, setLocalBirdY] = useState(null);
   const [localIsAlive, setLocalIsAlive] = useState(true);
+  const [roomSeed, setRoomSeed] = useState(null);
+  const [seededRandom, setSeededRandom] = useState(null);
   const channelRef = useRef(null);
   const scoreUpdateTimeoutRef = useRef(null);
   const gameStateRef = useRef('playing');
@@ -68,6 +70,7 @@ const MultiplayerFlappyBirdGame = ({ roomId, localUserId, onGameEnd, onBack }) =
   useEffect(() => {
     if (!roomId || !localUserId) return;
 
+    loadRoomSeed();
     loadPlayers();
 
     // Subscribe to player changes via Realtime
@@ -107,6 +110,25 @@ const MultiplayerFlappyBirdGame = ({ roomId, localUserId, onGameEnd, onBack }) =
       }
     };
   }, [roomId, localUserId]);
+
+  const loadRoomSeed = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('rooms')
+        .select('random_seed')
+        .eq('id', roomId)
+        .single();
+
+      if (error) throw error;
+      
+      if (data && data.random_seed) {
+        setRoomSeed(data.random_seed);
+        setSeededRandom(new SeededRandom(data.random_seed));
+      }
+    } catch (error) {
+      console.error('Error loading room seed:', error);
+    }
+  };
 
   const loadPlayers = async () => {
     try {
@@ -192,6 +214,7 @@ const MultiplayerFlappyBirdGame = ({ roomId, localUserId, onGameEnd, onBack }) =
       <FlappyBirdGame 
         avatarUrl={null} // Multiplayer uses colors, not URLs
         avatarId={localPlayer?.avatar || 'yellow'}
+        seededRandom={seededRandom} // Pass seeded random for synchronized coin generation
       />
 
       {/* Overlay: Render other players' ghost birds */}

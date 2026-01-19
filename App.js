@@ -8,6 +8,7 @@ import LobbyScreen from './components/LobbyScreen';
 import AvatarPicker from './components/AvatarPicker';
 import RoomScreen from './components/RoomScreen';
 import MultiplayerFlappyBirdGame from './components/MultiplayerFlappyBirdGame';
+import DifficultySelector from './components/DifficultySelector';
 
 // Import local penguin, flamingo, red, and mighty eagle avatars
 const penguinAvatar = require('./assets/penguin-avatar.png');
@@ -66,6 +67,11 @@ export default function App() {
   const [multiplayerScreen, setMultiplayerScreen] = useState(null); // null, 'avatar', 'lobby', 'game'
   const [currentRoom, setCurrentRoom] = useState(null);
   const [isHost, setIsHost] = useState(false);
+  
+  // Single-player difficulty state
+  const [showDifficultySelector, setShowDifficultySelector] = useState(false);
+  const [selectedDifficulty, setSelectedDifficulty] = useState('medium'); // 'easy', 'medium', 'hard'
+  const [showGame, setShowGame] = useState(true); // Show game immediately after login
 
   // Load Google Fonts for pixelated text (web only)
   useEffect(() => {
@@ -303,6 +309,8 @@ export default function App() {
     setMultiplayerScreen(null);
     setCurrentRoom(null);
     setIsHost(false);
+    setShowGame(false); // Reset game state when returning from multiplayer
+    setShowDifficultySelector(false);
   };
 
   return (
@@ -340,26 +348,58 @@ export default function App() {
               </TouchableOpacity>
             )}
           </View>
-          <TouchableOpacity 
-            style={styles.logoutButton} 
-            onPress={() => {
-              console.log('Logout button pressed');
-              handleLogout();
-            }}
-            activeOpacity={0.7}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          >
-            <Text style={styles.logoutText}>Logout</Text>
-          </TouchableOpacity>
+          <View style={styles.rightButtons}>
+            {gameMode === 'single' && (
+              <TouchableOpacity
+                style={styles.chooseLevelButton}
+                onPress={() => {
+                  setShowGame(false);
+                  setShowDifficultySelector(true);
+                }}
+                activeOpacity={0.7}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Text style={styles.chooseLevelText}>Choose Level</Text>
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity 
+              style={styles.logoutButton} 
+              onPress={() => {
+                console.log('Logout button pressed');
+                handleLogout();
+              }}
+              activeOpacity={0.7}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <Text style={styles.logoutText}>Logout</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
-        {/* Routing: Single-player or Multiplayer */}
-        {gameMode === 'single' && (
-          <FlappyBirdGame 
-            avatarUrl={user?.user_metadata?.avatar_url} 
-            avatarId={user?.user_metadata?.avatar_id || 'bird'} 
+        {/* Difficulty Selector for Single Player */}
+        {gameMode === 'single' && showDifficultySelector && !showGame && (
+          <DifficultySelector
+            onDifficultySelected={(difficulty) => {
+              console.log('Difficulty selected:', difficulty);
+              setSelectedDifficulty(difficulty);
+              setShowDifficultySelector(false);
+              setShowGame(true);
+            }}
+            onCancel={() => {
+              setShowDifficultySelector(false);
+            }}
           />
         )}
+
+        {/* Routing: Single-player or Multiplayer */}
+        {gameMode === 'single' && showGame && !showDifficultySelector && user && (
+          <FlappyBirdGame 
+            avatarUrl={user?.user_metadata?.avatar_url} 
+            avatarId={user?.user_metadata?.avatar_id || 'bird'}
+            difficulty={selectedDifficulty}
+          />
+        )}
+
 
         {/* Multiplayer screens */}
         {gameMode === 'multiplayer' && !multiplayerScreen && (
@@ -540,10 +580,31 @@ const styles = StyleSheet.create({
     pointerEvents: 'auto',
     elevation: 11,
   },
+  chooseLevelButton: {
+    backgroundColor: '#4CAF50',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 6,
+    minWidth: 110,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+  },
+  chooseLevelText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '600',
+  },
   logoutText: {
     color: '#FFFFFF',
     fontSize: 14,
     fontWeight: '600',
+  },
+  rightButtons: {
+    flexDirection: 'column',
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+    gap: 4,
   },
   // Modal styles
   modalOverlay: {
@@ -612,5 +673,27 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '600',
+  },
+  difficultyPromptContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#87CEEB',
+  },
+  startGameButton: {
+    backgroundColor: '#4CAF50',
+    paddingHorizontal: 40,
+    paddingVertical: 20,
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 10,
+  },
+  startGameButtonText: {
+    color: '#FFFFFF',
+    fontSize: 24,
+    fontWeight: 'bold',
   },
 });

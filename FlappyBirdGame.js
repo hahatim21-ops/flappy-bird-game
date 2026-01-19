@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import Bird from './components/Bird';
 import Pipe from './components/Pipe';
+import Coin from './components/Coin';
 import Score from './components/Score';
 import GameOver from './components/GameOver';
 import Background from './components/Background';
@@ -29,9 +30,11 @@ import Background from './components/Background';
  */
 
 // Game constants - these control the game's behavior
-const GRAVITY = 0.5; // How fast the bird falls (pixels per frame)
-const FLAP_STRENGTH = -8; // How much the bird jumps when tapped (negative = up)
-const PIPE_SPEED = 3; // How fast pipes move left (pixels per frame)
+// Base values (Medium difficulty)
+const BASE_GRAVITY = 0.5; // How fast the bird falls (pixels per frame)
+const BASE_FLAP_STRENGTH = -8; // How much the bird jumps when tapped (negative = up)
+const BASE_PIPE_SPEED = 3; // How fast pipes move left (pixels per frame)
+const BASE_PIPE_GAP_MULTIPLIER = 0.28; // Gap size multiplier (28% of screen height)
 const BACKGROUND_SPEED = 1; // Background scroll speed (slower than pipes for parallax effect)
 const PIPE_WIDTH = 90; // Width of each pipe (pixels) - increased thickness
 const BIRD_SIZE = 100; // Size of the bird container (width and height in pixels)
@@ -46,11 +49,47 @@ const FIRST_PIPE_DELAY = 500; // Delay before first pipe appears (milliseconds)
 const MIN_TOP_PIPE_HEIGHT = 60; // Minimum height of top pipe (pixels)
 const MIN_BOTTOM_PIPE_HEIGHT = 60; // Minimum height of bottom pipe (pixels)
 
-const FlappyBirdGame = ({ avatarUrl, avatarId = 'bird' }) => {
+// Difficulty multipliers
+// easy = original game settings
+// medium = slightly harder than original
+// hard = remains toughest
+const DIFFICULTY_SETTINGS = {
+  easy: {
+    gravity: BASE_GRAVITY, // Original gravity
+    flapStrength: BASE_FLAP_STRENGTH, // Original flap
+    pipeSpeed: BASE_PIPE_SPEED, // Original pipe speed
+    pipeGapMultiplier: BASE_PIPE_GAP_MULTIPLIER, // Original gap
+  },
+  medium: {
+    gravity: BASE_GRAVITY * 1.08, // 8% faster gravity
+    flapStrength: BASE_FLAP_STRENGTH * 1.08, // 8% stronger flap
+    pipeSpeed: BASE_PIPE_SPEED * 1.2, // 20% faster pipes
+    pipeGapMultiplier: BASE_PIPE_GAP_MULTIPLIER * 0.85, // 15% smaller gaps
+  },
+  hard: {
+    gravity: BASE_GRAVITY * 1.25, // 25% faster gravity
+    flapStrength: BASE_FLAP_STRENGTH * 1.12, // 12% stronger flap
+    pipeSpeed: BASE_PIPE_SPEED * 1.45, // 45% faster pipes
+    pipeGapMultiplier: BASE_PIPE_GAP_MULTIPLIER * 0.75, // 25% smaller gaps
+  },
+};
+const COIN_SIZE = 40; // Size of coins (width and height in pixels)
+const COIN_COLLISION_SIZE = 35; // Collision box size for coins (slightly smaller than visual)
+const MIN_COIN_DISTANCE = 500; // Minimum distance between coins (pixels)
+const COIN_SPAWN_CHANCE = 0.3; // 30% chance to spawn a coin when distance requirement is met
+
+const FlappyBirdGame = ({ avatarUrl, avatarId = 'bird', seededRandom = null, difficulty = 'medium' }) => {
   // Get screen dimensions for responsive design
   const screenData = Dimensions.get('window');
-  const screenWidth = screenData.width;
-  const screenHeight = screenData.height;
+  const screenWidth = screenData.width || 800; // Fallback if undefined
+  const screenHeight = screenData.height || 600; // Fallback if undefined
+
+  // Get difficulty settings (default to medium if invalid)
+  const difficultySettings = DIFFICULTY_SETTINGS[difficulty] || DIFFICULTY_SETTINGS.medium;
+  const GRAVITY = difficultySettings.gravity;
+  const FLAP_STRENGTH = difficultySettings.flapStrength;
+  const PIPE_SPEED = difficultySettings.pipeSpeed;
+  const PIPE_GAP_MULTIPLIER = difficultySettings.pipeGapMultiplier;
 
   // Get initial image index from localStorage, or default to 0
   // On each refresh, switch to the other image
@@ -78,10 +117,13 @@ const FlappyBirdGame = ({ avatarUrl, avatarId = 'bird' }) => {
   const [birdPosition, setBirdPosition] = useState({ x: BIRD_START_X, y: screenHeight / 2 });
   const [birdVelocity, setBirdVelocity] = useState(0); // Vertical velocity of the bird
   const [pipes, setPipes] = useState([]); // Array of pipe objects
+  const [coins, setCoins] = useState([]); // Array of coin objects
   const [score, setScore] = useState(0);
   const [nextPipeId, setNextPipeId] = useState(0); // Unique ID for each pipe
+  const [nextCoinId, setNextCoinId] = useState(0); // Unique ID for each coin
   const [startScreenImageIndex] = useState(getInitialImageIndex); // Use localStorage to persist and switch on refresh
   const [backgroundScrollX, setBackgroundScrollX] = useState(0); // Background scroll position
+  const lastCoinXRef = useRef(0); // Track the X position of the last coin spawned
 
   // Refs to track animation frame and game loop
   const gameLoopRef = useRef(null);
@@ -96,8 +138,8 @@ const FlappyBirdGame = ({ avatarUrl, avatarId = 'bird' }) => {
   const dieSoundRef = useRef(null);
   const hasPlayedDieSoundRef = useRef(false);
 
-  // Calculate dynamic pipe gap (at least 180px or 28% of screen height, whichever is larger)
-  const PIPE_GAP = Math.max(180, screenHeight * 0.28);
+  // Calculate dynamic pipe gap based on difficulty (at least 180px or multiplier% of screen height, whichever is larger)
+  const PIPE_GAP = Math.max(180, screenHeight * PIPE_GAP_MULTIPLIER);
   
   // Calculate dynamic pipe spacing (15% of screen width)
   const PIPE_SPACING = screenWidth * 0.15;
@@ -158,9 +200,12 @@ const FlappyBirdGame = ({ avatarUrl, avatarId = 'bird' }) => {
     setBirdPosition({ x: BIRD_START_X, y: screenHeight / 2 });
     setBirdVelocity(0);
     setPipes([]);
+    setCoins([]);
     setScore(0);
     setNextPipeId(0);
+    setNextCoinId(0);
     lastPipeXRef.current = screenWidth;
+    lastCoinXRef.current = 0; // Reset last coin position
     gameStartTimeRef.current = null;
     firstPipeSpawnedRef.current = false;
     setBackgroundScrollX(0); // Reset background scroll
@@ -179,7 +224,7 @@ const FlappyBirdGame = ({ avatarUrl, avatarId = 'bird' }) => {
     firstPipeSpawnedRef.current = true; // Mark that pipes can spawn immediately
     
     // Generate initial pipes immediately when game starts
-    const pipeGap = Math.max(180, screenHeight * 0.28);
+    const pipeGap = Math.max(180, screenHeight * PIPE_GAP_MULTIPLIER);
     const pipeSpacing = screenWidth * 0.15;
     const minGapY = MIN_TOP_PIPE_HEIGHT;
     const maxGapY = screenHeight - pipeGap - MIN_BOTTOM_PIPE_HEIGHT;
@@ -202,17 +247,46 @@ const FlappyBirdGame = ({ avatarUrl, avatarId = 'bird' }) => {
     const pipesNeeded = pipesForVisibleArea + extraPipes; // Total pipes needed
     
     // Generate all pipes at once - they will all be visible/ready at start
+    const initialCoins = [];
+    lastCoinXRef.current = 0; // Reset last coin position
     for (let i = 0; i < pipesNeeded; i++) {
       const gapY = Math.random() * (validMaxGapY - minGapY) + minGapY;
+      const pipeX = firstPipeX + (i * pipeSpacing);
       initialPipes.push({
         id: i,
-        x: firstPipeX + (i * pipeSpacing), // Start from first pipe position, spaced evenly
+        x: pipeX, // Start from first pipe position, spaced evenly
         topHeight: gapY,
         passed: false,
       });
+      
+      // Generate coin with distance check and random chance (not every pipe)
+      // Use seeded random for multiplayer synchronization, regular random for single-player
+      const random = seededRandom || { random: (min, max) => min + Math.random() * (max - min) };
+      const distanceFromLastCoin = pipeX - lastCoinXRef.current;
+      const shouldSpawnCoin = (distanceFromLastCoin >= MIN_COIN_DISTANCE || lastCoinXRef.current === 0) && 
+                               random.random(0, 1) < COIN_SPAWN_CHANCE;
+      
+      if (shouldSpawnCoin) {
+        // Place coin centered within the pipe gap (accessible to bird)
+        // X position: centered horizontally within the pipe width
+        const coinX = pipeX + (PIPE_WIDTH / 2); // Center of the pipe horizontally
+        
+        // Y position: centered vertically within the accessible gap area
+        const coinY = gapY + (pipeGap / 2); // Center of the gap vertically
+        
+        initialCoins.push({
+          id: `coin-${i}`, // Use string ID to avoid conflicts with pipe IDs
+          x: coinX,
+          y: coinY,
+          collected: false,
+        });
+        lastCoinXRef.current = coinX; // Update last coin position
+      }
     }
     setPipes(initialPipes);
+    setCoins(initialCoins);
     setNextPipeId(pipesNeeded);
+    setNextCoinId(pipesNeeded);
     lastPipeXRef.current = firstPipeX + ((pipesNeeded - 1) * pipeSpacing);
   }, [screenWidth, screenHeight]);
 
@@ -247,7 +321,7 @@ const FlappyBirdGame = ({ avatarUrl, avatarId = 'bird' }) => {
    */
   const generatePipe = useCallback(() => {
     // Calculate dynamic pipe gap (at least 180px or 28% of screen height, whichever is larger)
-    const pipeGap = Math.max(180, screenHeight * 0.28);
+    const pipeGap = Math.max(180, screenHeight * PIPE_GAP_MULTIPLIER);
     
     // Calculate valid gap position range
     // Top pipe must be at least MIN_TOP_PIPE_HEIGHT from top
@@ -273,6 +347,38 @@ const FlappyBirdGame = ({ avatarUrl, avatarId = 'bird' }) => {
   }, [screenWidth, screenHeight, nextPipeId]);
 
   /**
+   * Check if the bird collides with a coin
+   * Returns the coin ID if collision detected, null otherwise
+   */
+  const checkCoinCollision = useCallback((birdPos, currentCoins) => {
+    const collisionX = birdPos.x + BIRD_COLLISION_OFFSET;
+    const collisionY = birdPos.y + BIRD_COLLISION_OFFSET;
+    const coinRadius = COIN_COLLISION_SIZE / 2;
+    
+    for (const coin of currentCoins) {
+      if (coin.collected) continue; // Skip already collected coins
+      
+      const coinCenterX = coin.x;
+      const coinCenterY = coin.y;
+      
+      // Calculate distance between bird center and coin center
+      const birdCenterX = collisionX + (BIRD_COLLISION_SIZE / 2);
+      const birdCenterY = collisionY + (BIRD_COLLISION_SIZE / 2);
+      
+      const dx = birdCenterX - coinCenterX;
+      const dy = birdCenterY - coinCenterY;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+      
+      // Check if distance is less than sum of radii (collision)
+      if (distance < (BIRD_COLLISION_SIZE / 2) + coinRadius) {
+        return coin.id;
+      }
+    }
+    
+    return null;
+  }, []);
+
+  /**
    * Check if the bird collides with a pipe or screen boundaries
    * Returns true if collision detected
    * PRECISE collision detection - game ends ONLY when bird's base visually touches pipe
@@ -289,7 +395,7 @@ const FlappyBirdGame = ({ avatarUrl, avatarId = 'bird' }) => {
     }
 
     // Calculate dynamic pipe gap (at least 180px or 28% of screen height, whichever is larger)
-    const pipeGap = Math.max(180, screenHeight * 0.28);
+    const pipeGap = Math.max(180, screenHeight * PIPE_GAP_MULTIPLIER);
 
     // Check collision with each pipe - ONLY when bird's base visually touches pipe
     // NO false collisions - collision ONLY on actual visual contact
@@ -430,8 +536,8 @@ const FlappyBirdGame = ({ avatarUrl, avatarId = 'bird' }) => {
           // Spawn new pipe at rightmostPipe + pipeSpacing to maintain equal spacing
           // Keep enough pipes ahead to fill the screen (at least 8-10 pipes to prevent one-by-one appearance)
           if ((rightmostPipe <= screenWidth - pipeSpacing) && newPipes.length < 10) {
-            // Calculate dynamic pipe gap (at least 180px or 28% of screen height, whichever is larger)
-            const pipeGap = Math.max(180, screenHeight * 0.28);
+            // Calculate dynamic pipe gap based on difficulty (at least 180px or multiplier% of screen height, whichever is larger)
+            const pipeGap = Math.max(180, screenHeight * PIPE_GAP_MULTIPLIER);
             
             // Calculate valid gap position range
             // Top pipe must be at least MIN_TOP_PIPE_HEIGHT from top
@@ -454,6 +560,34 @@ const FlappyBirdGame = ({ avatarUrl, avatarId = 'bird' }) => {
               passed: false,
             });
             setNextPipeId((prevId) => prevId + 1);
+            
+            // Generate coin with distance check and random chance (not every pipe)
+            // Use seeded random for multiplayer synchronization, regular random for single-player
+            const random = seededRandom || { random: (min, max) => min + Math.random() * (max - min) };
+            const distanceFromLastCoin = newPipeX - lastCoinXRef.current;
+            const shouldSpawnCoin = distanceFromLastCoin >= MIN_COIN_DISTANCE && 
+                                     random.random(0, 1) < COIN_SPAWN_CHANCE;
+            
+            if (shouldSpawnCoin) {
+              // Place coin centered within the pipe gap (accessible to bird)
+              // X position: centered horizontally within the pipe width
+              const coinX = newPipeX + (PIPE_WIDTH / 2); // Center of the pipe horizontally
+              
+              // Y position: centered vertically within the accessible gap area
+              const coinY = gapY + (pipeGap / 2); // Center of the gap vertically
+              
+              setCoins((prevCoins) => [
+                ...prevCoins,
+                {
+                  id: `coin-${nextCoinId}`, // Use string ID to avoid conflicts
+                  x: coinX,
+                  y: coinY,
+                  collected: false,
+                },
+              ]);
+              setNextCoinId((prevId) => prevId + 1);
+              lastCoinXRef.current = coinX; // Update last coin position
+            }
           }
 
           // Check for collisions with updated pipes (only in 'playing' state)
@@ -473,6 +607,37 @@ const FlappyBirdGame = ({ avatarUrl, avatarId = 'bird' }) => {
 
           return newPipes;
         });
+        
+        // Update coins separately - move them left with pipes
+        setCoins((prevCoins) => {
+          let newCoins = prevCoins.map((coin) => {
+            // Move coin left at same speed as pipes
+            return { ...coin, x: coin.x - PIPE_SPEED };
+          });
+          
+          // Check for coin collisions with current bird position
+          const collectedCoinId = checkCoinCollision({ x: prevPos.x, y: newY }, newCoins);
+          if (collectedCoinId !== null) {
+            // Mark coin as collected and add 2 bonus points
+            newCoins = newCoins.map((coin) => {
+              if (coin.id === collectedCoinId && !coin.collected) {
+                setScore((prevScore) => prevScore + 2); // Add 2 bonus points
+                // Play point sound for coin collection
+                if (pointSoundRef.current) {
+                  pointSoundRef.current.currentTime = 0;
+                  pointSoundRef.current.play().catch(() => {});
+                }
+                return { ...coin, collected: true };
+              }
+              return coin;
+            });
+          }
+          
+          // Remove coins that are off-screen or collected
+          newCoins = newCoins.filter((coin) => coin.x + COIN_SIZE > 0 && !coin.collected);
+          
+          return newCoins;
+        });
 
         return { ...prevPos, y: newY };
       });
@@ -482,7 +647,7 @@ const FlappyBirdGame = ({ avatarUrl, avatarId = 'bird' }) => {
 
     // Continue the game loop
     gameLoopRef.current = requestAnimationFrame(gameLoop);
-  }, [gameState, screenWidth, screenHeight, checkCollision, nextPipeId]);
+  }, [gameState, screenWidth, screenHeight, checkCollision, checkCoinCollision, nextPipeId, nextCoinId]);
 
   /**
    * Start the game loop when game state changes to 'playing' or 'hit'
@@ -596,6 +761,18 @@ const FlappyBirdGame = ({ avatarUrl, avatarId = 'bird' }) => {
             screenHeight={screenHeight}
             width={PIPE_WIDTH}
           />
+        ))}
+
+        {/* Render coins (only during gameplay) */}
+        {gameState === 'playing' && coins.map((coin) => (
+          !coin.collected && (
+            <Coin
+              key={coin.id}
+              x={coin.x}
+              y={coin.y}
+              size={COIN_SIZE}
+            />
+          )
         ))}
 
         {/* Render bird - visible during gameplay, hit state (falling), and game over */}
