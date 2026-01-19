@@ -14,6 +14,11 @@ import {
   ActivityIndicator,
   Image,
   ScrollView,
+  Alert,
+  Platform,
+  Share,
+  TextInput,
+  Linking,
 } from 'react-native';
 import { supabase } from '../lib/supabase';
 
@@ -57,9 +62,82 @@ const AVATAR_OPTIONS = [
   },
 ];
 
-const AvatarPicker = ({ roomId, onAvatarSelected }) => {
+const AvatarPicker = ({ roomId, roomCode, onAvatarSelected }) => {
   const [selectedAvatar, setSelectedAvatar] = useState('bird'); // Default to Flappy Bird
   const [loading, setLoading] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState('');
+
+  const getInviteLink = () => {
+    // For web: use current origin/path. For native, fall back to just sharing the code.
+    if (typeof window !== 'undefined' && window.location?.origin) {
+      return `${window.location.origin}${window.location.pathname}?room=${encodeURIComponent(
+        (roomCode || '').toUpperCase()
+      )}`;
+    }
+    return null;
+  };
+
+  const handleInvite = async () => {
+    const code = (roomCode || '').toUpperCase();
+    const link = getInviteLink();
+    const message = link
+      ? `Join my Flappy Bird room!\n\nRoom Code: ${code}\nLink: ${link}`
+      : `Join my Flappy Bird room!\n\nRoom Code: ${code}`;
+
+    // 1) Try native share (mobile) / supported platforms
+    try {
+      await Share.share({ message });
+      return;
+    } catch {
+      // continue to clipboard fallback
+    }
+
+    // 2) Web clipboard fallback
+    try {
+      if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(link || code);
+        Alert.alert('Invite copied', 'Invite link copied to clipboard.');
+        return;
+      }
+    } catch {
+      // continue to final fallback
+    }
+
+    // 3) Final fallback: show the code/link so user can manually copy
+    Alert.alert('Invite', message);
+  };
+
+  const handleInviteEmail = async () => {
+    const code = (roomCode || '').toUpperCase();
+    const link = getInviteLink();
+    const email = (inviteEmail || '').trim();
+
+    if (!email || !email.includes('@')) {
+      Alert.alert('Invalid email', 'Please enter a valid email address.');
+      return;
+    }
+
+    const subject = `Flappy Bird Invite (Room ${code})`;
+    const body = link
+      ? `Join my Flappy Bird game!\n\nRoom Code: ${code}\nInvite Link: ${link}\n\nIf the link doesn’t open, paste the room code into Multiplayer > Join Room.`
+      : `Join my Flappy Bird game!\n\nRoom Code: ${code}\n\nPaste the room code into Multiplayer > Join Room.`;
+
+    const mailto = `mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent(
+      subject
+    )}&body=${encodeURIComponent(body)}`;
+
+    try {
+      const canOpen = await Linking.canOpenURL(mailto);
+      if (!canOpen) {
+        Alert.alert('Email app not available', `Send this code to your friend: ${code}`);
+        return;
+      }
+      await Linking.openURL(mailto);
+      setInviteEmail('');
+    } catch (e) {
+      Alert.alert('Could not open email', `Send this code to your friend: ${code}`);
+    }
+  };
 
   /**
    * Handle avatar selection and update room_players
@@ -99,6 +177,41 @@ const AvatarPicker = ({ roomId, onAvatarSelected }) => {
       <View style={styles.content}>
         <Text style={styles.title}>Choose Your Bird</Text>
         <Text style={styles.subtitle}>Select your avatar</Text>
+
+        {!!roomCode && (
+          <TouchableOpacity
+            style={styles.inviteButton}
+            onPress={handleInvite}
+            disabled={loading}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.inviteButtonText}>Invite</Text>
+            <Text style={styles.inviteButtonSubtext}>Room Code: {String(roomCode).toUpperCase()}</Text>
+          </TouchableOpacity>
+        )}
+
+        {!!roomCode && (
+          <View style={styles.inviteEmailRow}>
+            <TextInput
+              style={styles.inviteEmailInput}
+              placeholder="Friend's email"
+              placeholderTextColor="#7A7A7A"
+              value={inviteEmail}
+              onChangeText={setInviteEmail}
+              autoCapitalize="none"
+              keyboardType="email-address"
+              editable={!loading}
+            />
+            <TouchableOpacity
+              style={styles.inviteEmailButton}
+              onPress={handleInviteEmail}
+              disabled={loading}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.inviteEmailButtonText}>Send</Text>
+            </TouchableOpacity>
+          </View>
+        )}
 
         <ScrollView style={styles.avatarContainer} contentContainerStyle={styles.avatarGrid}>
           {AVATAR_OPTIONS.map((avatar) => (
@@ -171,6 +284,58 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#666666',
     marginBottom: 30,
+  },
+  inviteButton: {
+    width: '100%',
+    backgroundColor: '#2196F3',
+    borderRadius: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  inviteButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  inviteButtonSubtext: {
+    marginTop: 4,
+    color: 'rgba(255,255,255,0.95)',
+    fontSize: 12,
+    fontWeight: '600',
+    letterSpacing: 1,
+    fontFamily: Platform.OS === 'web' ? 'monospace' : undefined,
+  },
+  inviteEmailRow: {
+    width: '100%',
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 18,
+  },
+  inviteEmailInput: {
+    flex: 1,
+    backgroundColor: '#F5F5F5',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 10,
+    fontSize: 14,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+  },
+  inviteEmailButton: {
+    backgroundColor: '#4CAF50',
+    paddingHorizontal: 16,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 70,
+  },
+  inviteEmailButtonText: {
+    color: '#FFFFFF',
+    fontWeight: '800',
+    fontSize: 14,
   },
   avatarContainer: {
     width: '100%',

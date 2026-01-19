@@ -72,6 +72,7 @@ export default function App() {
   const [showDifficultySelector, setShowDifficultySelector] = useState(false);
   const [selectedDifficulty, setSelectedDifficulty] = useState('medium'); // 'easy', 'medium', 'hard'
   const [showGame, setShowGame] = useState(true); // Show game immediately after login
+  const [isGameActive, setIsGameActive] = useState(false); // True when bird is flying/playing
 
   // Load Google Fonts for pixelated text (web only)
   useEffect(() => {
@@ -290,8 +291,9 @@ export default function App() {
     : { uri: currentAvatarData.url };
 
   // Multiplayer handlers
-  const handleJoinRoom = (roomId, isHost) => {
-    setCurrentRoom({ id: roomId });
+  const handleJoinRoom = (room, isHost) => {
+    // room: { id, code }
+    setCurrentRoom(room);
     setIsHost(isHost);
     setMultiplayerScreen('avatar'); // Go to Avatar Picker
   };
@@ -309,9 +311,83 @@ export default function App() {
     setMultiplayerScreen(null);
     setCurrentRoom(null);
     setIsHost(false);
-    setShowGame(false); // Reset game state when returning from multiplayer
+    // Ensure we always return to the single-player game view (avoid blank screen)
+    setShowGame(true);
     setShowDifficultySelector(false);
   };
+
+  // --- Invite link auto-join support (web) ---
+  useEffect(() => {
+    if (!session || !user || needsProfileSetup) return;
+    if (typeof window === 'undefined') return;
+
+    const params = new URLSearchParams(window.location.search);
+    const roomCode = (params.get('room') || '').toUpperCase().trim();
+    if (!roomCode || roomCode.length !== 6) return;
+
+    let cancelled = false;
+
+    const joinByCode = async () => {
+      try {
+        // Find room by code (prefer waiting rooms)
+        const { data: rooms, error: roomError } = await supabase
+          .from('rooms')
+          .select('*')
+          .eq('code', roomCode)
+          .limit(1);
+
+        if (roomError) throw roomError;
+        if (!rooms || rooms.length === 0) return;
+
+        const room = rooms[0];
+
+        // Ensure player exists in room_players (idempotent)
+        const { data: existingPlayer, error: existingError } = await supabase
+          .from('room_players')
+          .select('id')
+          .eq('room_id', room.id)
+          .eq('user_id', user.id)
+          .limit(1);
+
+        if (existingError) {
+          // Non-fatal; still attempt insert
+          console.warn('Could not check existing player:', existingError);
+        }
+
+        if (!existingPlayer || existingPlayer.length === 0) {
+          await supabase.from('room_players').insert({
+            room_id: room.id,
+            user_id: user.id,
+            avatar: 'yellow',
+            score: 0,
+            is_alive: true,
+          });
+        }
+
+        if (cancelled) return;
+
+        // Navigate to multiplayer avatar picker
+        setGameMode('multiplayer');
+        setMultiplayerScreen('avatar');
+        setCurrentRoom({ id: room.id, code: room.code });
+        setIsHost(room.host_user_id === user.id);
+
+        // Remove the param so refresh doesn't re-run join
+        try {
+          const newUrl = `${window.location.origin}${window.location.pathname}`;
+          window.history.replaceState({}, '', newUrl);
+        } catch {}
+      } catch (e) {
+        console.warn('Auto-join by invite link failed:', e?.message || e);
+      }
+    };
+
+    joinByCode();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [session, user, needsProfileSetup]);
 
   return (
     <>
@@ -335,7 +411,7 @@ export default function App() {
             <Text style={styles.userText}>
               {displayPlayerName}
             </Text>
-            {gameMode === 'single' && (
+            {gameMode === 'single' && !showDifficultySelector && !isGameActive && (
               <TouchableOpacity
                 style={styles.multiplayerButton}
                 onPress={() => {
@@ -349,7 +425,7 @@ export default function App() {
             )}
           </View>
           <View style={styles.rightButtons}>
-            {gameMode === 'single' && (
+            {gameMode === 'single' && !showDifficultySelector && !isGameActive && (
               <TouchableOpacity
                 style={styles.chooseLevelButton}
                 onPress={() => {
@@ -387,6 +463,8 @@ export default function App() {
             }}
             onCancel={() => {
               setShowDifficultySelector(false);
+              // If user cancels level selection, return to game view (avoid blank screen)
+              setShowGame(true);
             }}
           />
         )}
@@ -397,6 +475,7 @@ export default function App() {
             avatarUrl={user?.user_metadata?.avatar_url} 
             avatarId={user?.user_metadata?.avatar_id || 'bird'}
             difficulty={selectedDifficulty}
+            onGameStateChange={setIsGameActive}
           />
         )}
 
@@ -412,6 +491,7 @@ export default function App() {
         {gameMode === 'multiplayer' && multiplayerScreen === 'avatar' && currentRoom && (
           <AvatarPicker
             roomId={currentRoom.id}
+            roomCode={currentRoom.code}
             onAvatarSelected={handleAvatarSelected}
           />
         )}

@@ -78,7 +78,7 @@ const COIN_COLLISION_SIZE = 35; // Collision box size for coins (slightly smalle
 const MIN_COIN_DISTANCE = 500; // Minimum distance between coins (pixels)
 const COIN_SPAWN_CHANCE = 0.3; // 30% chance to spawn a coin when distance requirement is met
 
-const FlappyBirdGame = ({ avatarUrl, avatarId = 'bird', seededRandom = null, difficulty = 'medium' }) => {
+const FlappyBirdGame = ({ avatarUrl, avatarId = 'bird', seededRandom = null, difficulty = 'medium', onGameStateChange }) => {
   // Get screen dimensions for responsive design
   const screenData = Dimensions.get('window');
   const screenWidth = screenData.width || 800; // Fallback if undefined
@@ -124,6 +124,14 @@ const FlappyBirdGame = ({ avatarUrl, avatarId = 'bird', seededRandom = null, dif
   const [startScreenImageIndex] = useState(getInitialImageIndex); // Use localStorage to persist and switch on refresh
   const [backgroundScrollX, setBackgroundScrollX] = useState(0); // Background scroll position
   const lastCoinXRef = useRef(0); // Track the X position of the last coin spawned
+
+  // Notify parent (App) when game becomes active or inactive
+  useEffect(() => {
+    if (typeof onGameStateChange === 'function') {
+      const isActive = gameState === 'playing' || gameState === 'hit';
+      onGameStateChange(isActive);
+    }
+  }, [gameState, onGameStateChange]);
 
   // Refs to track animation frame and game loop
   const gameLoopRef = useRef(null);
