@@ -71,7 +71,6 @@ export default function App() {
   // Single-player difficulty state
   const [showDifficultySelector, setShowDifficultySelector] = useState(false);
   const [selectedDifficulty, setSelectedDifficulty] = useState('easy'); // 'easy', 'medium', 'hard'
-  const [showGame, setShowGame] = useState(true); // Show game immediately after login
   const [isGameActive, setIsGameActive] = useState(false); // True when bird is flying/playing
 
   // Load Google Fonts for pixelated text (web only)
@@ -310,8 +309,6 @@ export default function App() {
     setMultiplayerScreen(null);
     setCurrentRoom(null);
     setIsHost(false);
-    // Ensure we always return to the single-player game view (avoid blank screen)
-    setShowGame(true);
     setShowDifficultySelector(false);
   };
 
@@ -337,7 +334,7 @@ export default function App() {
             <Text style={styles.userText}>
               {displayPlayerName}
             </Text>
-            {gameMode === 'single' && !showDifficultySelector && !isGameActive && (
+            {gameMode === 'single' && !isGameActive && (
               <TouchableOpacity
                 style={styles.multiplayerButton}
                 onPress={() => {
@@ -351,13 +348,10 @@ export default function App() {
             )}
           </View>
           <View style={styles.rightButtons}>
-            {gameMode === 'single' && !showDifficultySelector && !isGameActive && (
+            {gameMode === 'single' && !isGameActive && (
               <TouchableOpacity
                 style={styles.chooseLevelButton}
-                onPress={() => {
-                  setShowGame(false);
-                  setShowDifficultySelector(true);
-                }}
+                onPress={() => setShowDifficultySelector(true)}
                 activeOpacity={0.7}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               >
@@ -378,25 +372,8 @@ export default function App() {
           </View>
         </View>
 
-        {/* Difficulty Selector for Single Player */}
-        {gameMode === 'single' && showDifficultySelector && !showGame && (
-          <DifficultySelector
-            onDifficultySelected={(difficulty) => {
-              console.log('Difficulty selected:', difficulty);
-              setSelectedDifficulty(difficulty);
-              setShowDifficultySelector(false);
-              setShowGame(true);
-            }}
-            onCancel={() => {
-              setShowDifficultySelector(false);
-              // If user cancels level selection, return to game view (avoid blank screen)
-              setShowGame(true);
-            }}
-          />
-        )}
-
         {/* Routing: Single-player or Multiplayer */}
-        {gameMode === 'single' && showGame && !showDifficultySelector && user && (
+        {gameMode === 'single' && user && (
           <FlappyBirdGame 
             avatarUrl={user?.user_metadata?.avatar_url} 
             avatarId={user?.user_metadata?.avatar_id || 'bird'}
@@ -438,6 +415,25 @@ export default function App() {
             onBack={handleMultiplayerBack}
           />
         )}
+
+        {/* Difficulty Selector Modal */}
+        <Modal
+          visible={showDifficultySelector}
+          transparent={true}
+          animationType="fade"
+          onRequestClose={() => setShowDifficultySelector(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <DifficultySelector
+              selectedDifficulty={selectedDifficulty}
+              onDifficultySelected={(difficulty) => {
+                setSelectedDifficulty(difficulty);
+                setShowDifficultySelector(false);
+              }}
+              onCancel={() => setShowDifficultySelector(false)}
+            />
+          </View>
+        </Modal>
 
         {/* Avatar Picker Modal */}
         <Modal
