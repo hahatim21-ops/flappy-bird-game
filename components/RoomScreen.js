@@ -181,8 +181,8 @@ const RoomScreen = ({ roomId, isHost, onGameStart, onBack }) => {
   };
 
   const handleStartGame = async () => {
-    if (players.filter(p => p.is_ready).length < 2) {
-      Alert.alert('Not Enough Players', 'At least 2 players must be ready to start');
+    if (players.length < 1) {
+      Alert.alert('No Players', 'At least 1 player must be in the room to start');
       return;
     }
 
@@ -254,7 +254,7 @@ const RoomScreen = ({ roomId, isHost, onGameStart, onBack }) => {
         </View>
 
         <ScrollView style={styles.playersList}>
-          <Text style={styles.sectionTitle}>Players ({players.length}/5)</Text>
+          <Text style={styles.sectionTitle}>Players ({players.length})</Text>
           {players.map((player) => {
             const isCurrentPlayer = player.user_id === currentUser?.id;
             return (
@@ -307,11 +307,10 @@ const RoomScreen = ({ roomId, isHost, onGameStart, onBack }) => {
               style={[
                 styles.button,
                 styles.startButton,
-                players.filter(p => p.is_ready).length < 2 && styles.buttonDisabled,
-                loading && styles.buttonDisabled,
+                (loading || players.length < 1) && styles.buttonDisabled,
               ]}
               onPress={handleStartGame}
-              disabled={loading || players.filter(p => p.is_ready).length < 2}
+              disabled={loading || players.length < 1}
             >
               {loading ? (
                 <ActivityIndicator color="#FFFFFF" />

@@ -177,19 +177,14 @@ const LobbyScreen = ({ onJoinRoom, onBack }) => {
 
       const room = rooms[0];
 
-      // Check if room is full (max 5 players)
+      // Check if player already in room
       const { data: players, error: playersError } = await supabase
         .from('room_players')
-        .select('id')
+        .select('id, user_id')
         .eq('room_id', room.id);
 
       if (playersError) throw playersError;
-      if (players && players.length >= 5) {
-        Alert.alert('Room Full', 'This room already has 5 players');
-        return;
-      }
 
-      // Check if player already in room
       const existingPlayer = players?.find(p => p.user_id === user.id);
       if (existingPlayer) {
         // Already in room, go to avatar picker
