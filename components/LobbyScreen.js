@@ -17,6 +17,82 @@ import {
 } from 'react-native';
 import { supabase } from '../lib/supabase';
 
+const getPlayerName = (user) =>
+  user.user_metadata?.player_name ||
+  user.user_metadata?.full_name ||
+  user.email?.split('@')[0] ||
+  'Player';
+
+const isMissingColumnError = (error) => {
+  const message = `${error?.message || ''} ${error?.details || ''}`.toLowerCase();
+  return message.includes('column') || error?.code === 'PGRST204';
+};
+
+const createRoomRecord = async (user, code) => {
+  const randomSeed = Math.floor(Math.random() * 1000000);
+  const attempts = [
+    { code, state: 'waiting', host_user_id: user.id, random_seed: randomSeed },
+    { code, state: 'waiting', host_user_id: user.id },
+    { code, state: 'waiting', host_id: user.id, random_seed: randomSeed },
+    { code, state: 'waiting', host_id: user.id },
+    { code, state: 'waiting' },
+  ];
+
+  let lastError = null;
+  for (const payload of attempts) {
+    const { data, error } = await supabase.from('rooms').insert(payload).select().single();
+    if (!error && data) return data;
+    lastError = error;
+    if (!isMissingColumnError(error)) break;
+  }
+
+  throw lastError || new Error('Failed to create room');
+};
+
+const addPlayerRecord = async (roomId, user) => {
+  const playerName = getPlayerName(user);
+  const attempts = [
+    {
+      room_id: roomId,
+      user_id: user.id,
+      player_name: playerName,
+      avatar: 'yellow',
+      score: 0,
+      is_alive: true,
+    },
+    {
+      room_id: roomId,
+      user_id: user.id,
+      avatar: 'yellow',
+      score: 0,
+      is_alive: true,
+    },
+    {
+      room_id: roomId,
+      user_id: user.id,
+      avatar_color: 'yellow',
+      score: 0,
+      is_alive: true,
+    },
+    {
+      room_id: roomId,
+      user_id: user.id,
+      score: 0,
+      is_alive: true,
+    },
+  ];
+
+  let lastError = null;
+  for (const payload of attempts) {
+    const { error } = await supabase.from('room_players').insert(payload);
+    if (!error) return;
+    lastError = error;
+    if (!isMissingColumnError(error)) break;
+  }
+
+  throw lastError || new Error('Failed to join room');
+};
+
 const LobbyScreen = ({ onJoinRoom, onBack }) => {
   const [roomCode, setRoomCode] = useState('');
   const [loading, setLoading] = useState(false);
@@ -70,47 +146,14 @@ const LobbyScreen = ({ onJoinRoom, onBack }) => {
         // Continue with generated code
       }
 
-      // Create room with host_user_id
-      const { data: room, error: roomError } = await supabase
-        .from('rooms')
-        .insert({
-          code: code,
-          state: 'waiting',
-          host_user_id: user.id,
-          random_seed: Math.floor(Math.random() * 1000000),
-        })
-        .select()
-        .single();
-
-      if (roomError) {
-        console.error('Room creation error:', roomError);
-        throw new Error(`Failed to create room: ${roomError.message}`);
-      }
-
-      if (!room) {
-        throw new Error('Room was not created');
-      }
+      // Create room (fallback if optional columns are missing in Supabase)
+      const room = await createRoomRecord(user, code);
 
       // Auto-join creator as player
-      const playerName = user.user_metadata?.player_name ||
-                        user.user_metadata?.full_name ||
-                        user.email?.split('@')[0] ||
-                        'Player';
-
-      const { error: playerError } = await supabase
-        .from('room_players')
-        .insert({
-          room_id: room.id,
-          user_id: user.id,
-          player_name: playerName,
-          avatar: 'yellow',
-          score: 0,
-          is_alive: true,
-        });
-
-      if (playerError) {
+      try {
+        await addPlayerRecord(room.id, user);
+      } catch (playerError) {
         console.error('Player creation error:', playerError);
-        // Try to delete the room if player creation fails
         await supabase.from('rooms').delete().eq('id', room.id);
         throw new Error(`Failed to join room: ${playerError.message}`);
       }
@@ -199,23 +242,7 @@ const LobbyScreen = ({ onJoinRoom, onBack }) => {
       }
 
       // Add player to room
-      const playerName = user.user_metadata?.player_name || 
-                        user.user_metadata?.full_name || 
-                        user.email?.split('@')[0] || 
-                        'Player';
-
-      const { error: playerError } = await supabase
-        .from('room_players')
-        .insert({
-          room_id: room.id,
-          user_id: user.id,
-          player_name: playerName,
-          avatar: 'yellow',
-          score: 0,
-          is_alive: true,
-        });
-
-      if (playerError) throw playerError;
+      await addPlayerRecord(room.id, user);
 
       // Navigate to Avatar Picker
       // Host is determined by host_user_id from room
