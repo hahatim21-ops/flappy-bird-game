@@ -1,5 +1,7 @@
 const createExpoWebpackConfigAsync = require('@expo/webpack-config');
+const CopyWebpackPlugin = require('copy-webpack-plugin');
 const Dotenv = require('dotenv-webpack');
+const path = require('path');
 
 module.exports = async function (env, argv) {
   const config = await createExpoWebpackConfigAsync(env, argv);
@@ -10,6 +12,18 @@ module.exports = async function (env, argv) {
       path: '.env',
       systemvars: true,
       silent: true,
+    })
+  );
+
+  // Copy login background as-is to preserve original image quality
+  config.plugins.push(
+    new CopyWebpackPlugin({
+      patterns: [
+        {
+          from: path.resolve(__dirname, 'public/login-background.png'),
+          to: 'login-background.png',
+        },
+      ],
     })
   );
 

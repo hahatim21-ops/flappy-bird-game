@@ -1,8 +1,11 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, TextInput, ImageBackground } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, TextInput, ImageBackground, Platform } from 'react-native';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 
-const loginBackground = require('../assets/login-background.png');
+// Serve from /public on web to avoid webpack image compression
+const loginBackground = Platform.OS === 'web'
+  ? { uri: '/login-background.png' }
+  : require('../assets/login-background.png');
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
