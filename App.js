@@ -70,7 +70,7 @@ export default function App() {
   
   // Single-player difficulty state
   const [showDifficultySelector, setShowDifficultySelector] = useState(false);
-  const [selectedDifficulty, setSelectedDifficulty] = useState('medium'); // 'easy', 'medium', 'hard'
+  const [selectedDifficulty, setSelectedDifficulty] = useState('easy'); // 'easy', 'medium', 'hard'
   const [showGame, setShowGame] = useState(true); // Show game immediately after login
   const [isGameActive, setIsGameActive] = useState(false); // True when bird is flying/playing
 

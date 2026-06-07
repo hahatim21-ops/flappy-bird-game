@@ -50,42 +50,41 @@ const MIN_TOP_PIPE_HEIGHT = 60; // Minimum height of top pipe (pixels)
 const MIN_BOTTOM_PIPE_HEIGHT = 60; // Minimum height of bottom pipe (pixels)
 
 // Difficulty multipliers
-// easy = original game settings
-// medium = slightly harder than original
-// hard = remains toughest
+// easy/medium use original game speed; medium/hard only tighten pipe gaps
 const DIFFICULTY_SETTINGS = {
   easy: {
-    gravity: BASE_GRAVITY, // Original gravity
-    flapStrength: BASE_FLAP_STRENGTH, // Original flap
-    pipeSpeed: BASE_PIPE_SPEED, // Original pipe speed
-    pipeGapMultiplier: BASE_PIPE_GAP_MULTIPLIER, // Original gap
+    gravity: BASE_GRAVITY,
+    flapStrength: BASE_FLAP_STRENGTH,
+    pipeSpeed: BASE_PIPE_SPEED,
+    pipeGapMultiplier: BASE_PIPE_GAP_MULTIPLIER,
   },
   medium: {
-    gravity: BASE_GRAVITY * 1.08, // 8% faster gravity
-    flapStrength: BASE_FLAP_STRENGTH * 1.08, // 8% stronger flap
-    pipeSpeed: BASE_PIPE_SPEED * 1.2, // 20% faster pipes
-    pipeGapMultiplier: BASE_PIPE_GAP_MULTIPLIER * 0.85, // 15% smaller gaps
+    gravity: BASE_GRAVITY,
+    flapStrength: BASE_FLAP_STRENGTH,
+    pipeSpeed: BASE_PIPE_SPEED,
+    pipeGapMultiplier: BASE_PIPE_GAP_MULTIPLIER * 0.85,
   },
   hard: {
-    gravity: BASE_GRAVITY * 1.25, // 25% faster gravity
-    flapStrength: BASE_FLAP_STRENGTH * 1.12, // 12% stronger flap
-    pipeSpeed: BASE_PIPE_SPEED * 1.45, // 45% faster pipes
-    pipeGapMultiplier: BASE_PIPE_GAP_MULTIPLIER * 0.75, // 25% smaller gaps
+    gravity: BASE_GRAVITY * 1.15,
+    flapStrength: BASE_FLAP_STRENGTH * 1.08,
+    pipeSpeed: BASE_PIPE_SPEED * 1.25,
+    pipeGapMultiplier: BASE_PIPE_GAP_MULTIPLIER * 0.75,
   },
 };
+const TARGET_FRAME_MS = 1000 / 60;
 const COIN_SIZE = 40; // Size of coins (width and height in pixels)
 const COIN_COLLISION_SIZE = 35; // Collision box size for coins (slightly smaller than visual)
 const MIN_COIN_DISTANCE = 500; // Minimum distance between coins (pixels)
 const COIN_SPAWN_CHANCE = 0.3; // 30% chance to spawn a coin when distance requirement is met
 
-const FlappyBirdGame = ({ avatarUrl, avatarId = 'bird', seededRandom = null, difficulty = 'medium', onGameStateChange }) => {
+const FlappyBirdGame = ({ avatarUrl, avatarId = 'bird', seededRandom = null, difficulty = 'easy', onGameStateChange }) => {
   // Get screen dimensions for responsive design
   const screenData = Dimensions.get('window');
   const screenWidth = screenData.width || 800; // Fallback if undefined
   const screenHeight = screenData.height || 600; // Fallback if undefined
 
-  // Get difficulty settings (default to medium if invalid)
-  const difficultySettings = DIFFICULTY_SETTINGS[difficulty] || DIFFICULTY_SETTINGS.medium;
+  // Get difficulty settings (default to easy/original speed if invalid)
+  const difficultySettings = DIFFICULTY_SETTINGS[difficulty] || DIFFICULTY_SETTINGS.easy;
   const GRAVITY = difficultySettings.gravity;
   const FLAP_STRENGTH = difficultySettings.flapStrength;
   const PIPE_SPEED = difficultySettings.pipeSpeed;
@@ -135,6 +134,7 @@ const FlappyBirdGame = ({ avatarUrl, avatarId = 'bird', seededRandom = null, dif
 
   // Refs to track animation frame and game loop
   const gameLoopRef = useRef(null);
+  const lastFrameTimeRef = useRef(null);
   const lastPipeXRef = useRef(screenWidth); // Track the rightmost pipe position
   const gameStartTimeRef = useRef(null); // Track when game started playing
   const firstPipeSpawnedRef = useRef(false); // Track if first pipe has been spawned
@@ -219,6 +219,7 @@ const FlappyBirdGame = ({ avatarUrl, avatarId = 'bird', seededRandom = null, dif
     setBackgroundScrollX(0); // Reset background scroll
     hasHitGroundRef.current = false; // Reset ground hit flag
     hasPlayedDieSoundRef.current = false; // Reset die sound flag
+    lastFrameTimeRef.current = null;
     setGameState('start');
   }, [screenHeight, screenWidth]);
 
@@ -228,6 +229,7 @@ const FlappyBirdGame = ({ avatarUrl, avatarId = 'bird', seededRandom = null, dif
   const startGame = useCallback(() => {
     setGameState('playing');
     setBirdVelocity(FLAP_STRENGTH); // Give initial upward velocity
+    lastFrameTimeRef.current = null;
     gameStartTimeRef.current = Date.now(); // Record when game started
     firstPipeSpawnedRef.current = true; // Mark that pipes can spawn immediately
     
@@ -456,14 +458,26 @@ const FlappyBirdGame = ({ avatarUrl, avatarId = 'bird', seededRandom = null, dif
 
     const isInHitState = gameState === 'hit';
 
+    const now = performance.now();
+    let timeScale = 1;
+    if (lastFrameTimeRef.current !== null) {
+      const elapsed = now - lastFrameTimeRef.current;
+      timeScale = Math.min(Math.max(elapsed / TARGET_FRAME_MS, 0.5), 3);
+    }
+    lastFrameTimeRef.current = now;
+
+    const frameGravity = GRAVITY * timeScale;
+    const framePipeSpeed = PIPE_SPEED * timeScale;
+    const frameBackgroundSpeed = BACKGROUND_SPEED * timeScale;
+
     // Update background scroll position (continuous scrolling - stop in hit state)
     if (!isInHitState) {
-      setBackgroundScrollX((prevScroll) => prevScroll + BACKGROUND_SPEED);
+      setBackgroundScrollX((prevScroll) => prevScroll + frameBackgroundSpeed);
     }
 
     // Update bird velocity (apply gravity - ALWAYS, even in hit state)
     setBirdVelocity((prevVel) => {
-      const newVelocity = prevVel + GRAVITY;
+      const newVelocity = prevVel + frameGravity;
       
       // Update bird position based on new velocity
       setBirdPosition((prevPos) => {
@@ -511,7 +525,7 @@ const FlappyBirdGame = ({ avatarUrl, avatarId = 'bird', seededRandom = null, dif
         setPipes((prevPipes) => {
           let newPipes = prevPipes.map((pipe) => {
             // Move pipe left
-            const newX = pipe.x - PIPE_SPEED;
+            const newX = pipe.x - framePipeSpeed;
 
             // Check if bird passed this pipe (for scoring)
             let passed = pipe.passed;
@@ -620,7 +634,7 @@ const FlappyBirdGame = ({ avatarUrl, avatarId = 'bird', seededRandom = null, dif
         setCoins((prevCoins) => {
           let newCoins = prevCoins.map((coin) => {
             // Move coin left at same speed as pipes
-            return { ...coin, x: coin.x - PIPE_SPEED };
+            return { ...coin, x: coin.x - framePipeSpeed };
           });
           
           // Check for coin collisions with current bird position
