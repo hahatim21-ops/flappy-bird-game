@@ -131,6 +131,10 @@ const RoomScreen = ({ roomId, isHost, onGameStart, onBack }) => {
 
       if (error) throw error;
       setRoom(data);
+
+      if (data?.state === 'playing') {
+        onGameStart();
+      }
     } catch (error) {
       console.error('Error loading room:', error);
     }
@@ -189,19 +193,23 @@ const RoomScreen = ({ roomId, isHost, onGameStart, onBack }) => {
     try {
       setLoading(true);
 
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('rooms')
         .update({ state: 'playing', updated_at: new Date().toISOString() })
-        .eq('id', roomId);
+        .eq('id', roomId)
+        .select('id, state')
+        .single();
 
       if (error) throw error;
+      if (!data || data.state !== 'playing') {
+        throw new Error('Could not start the game. Only the room host can start.');
+      }
 
-      // Navigation will happen automatically via Realtime subscription
-      // onGameStart() will be called when state changes
-
+      setLoading(false);
+      onGameStart();
     } catch (error) {
       console.error('Error starting game:', error);
-      Alert.alert('Error', 'Failed to start game');
+      Alert.alert('Error', error.message || 'Failed to start game');
       setLoading(false);
     }
   };

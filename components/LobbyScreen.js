@@ -76,7 +76,8 @@ const LobbyScreen = ({ onJoinRoom, onBack }) => {
         .insert({
           code: code,
           state: 'waiting',
-          host_user_id: user.id, // Required field
+          host_user_id: user.id,
+          random_seed: Math.floor(Math.random() * 1000000),
         })
         .select()
         .single();
@@ -91,18 +92,21 @@ const LobbyScreen = ({ onJoinRoom, onBack }) => {
       }
 
       // Auto-join creator as player
-      // Only insert fields that exist in the table
-      const playerData = {
-        room_id: room.id,
-        user_id: user.id,
-        avatar: 'yellow', // Default avatar, will change in AvatarPicker
-        score: 0,
-        is_alive: true,
-      };
+      const playerName = user.user_metadata?.player_name ||
+                        user.user_metadata?.full_name ||
+                        user.email?.split('@')[0] ||
+                        'Player';
 
       const { error: playerError } = await supabase
         .from('room_players')
-        .insert(playerData);
+        .insert({
+          room_id: room.id,
+          user_id: user.id,
+          player_name: playerName,
+          avatar: 'yellow',
+          score: 0,
+          is_alive: true,
+        });
 
       if (playerError) {
         console.error('Player creation error:', playerError);
@@ -189,7 +193,7 @@ const LobbyScreen = ({ onJoinRoom, onBack }) => {
       if (existingPlayer) {
         // Already in room, go to avatar picker
         // Host is determined by host_user_id from room
-        const isHost = room.host_user_id === user.id;
+        const isHost = room.host_user_id === user.id || room.host_id === user.id;
         onJoinRoom(room.id, isHost);
         return;
       }
@@ -205,7 +209,8 @@ const LobbyScreen = ({ onJoinRoom, onBack }) => {
         .insert({
           room_id: room.id,
           user_id: user.id,
-          avatar: 'yellow', // Default avatar, will change in AvatarPicker
+          player_name: playerName,
+          avatar: 'yellow',
           score: 0,
           is_alive: true,
         });
@@ -214,7 +219,7 @@ const LobbyScreen = ({ onJoinRoom, onBack }) => {
 
       // Navigate to Avatar Picker
       // Host is determined by host_user_id from room
-      const isHost = room.host_user_id === user.id;
+      const isHost = room.host_user_id === user.id || room.host_id === user.id;
       onJoinRoom(room.id, isHost);
 
     } catch (error) {

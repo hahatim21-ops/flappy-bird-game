@@ -81,6 +81,13 @@ ON public.rooms FOR SELECT
 TO authenticated 
 USING (true);
 
+DROP POLICY IF EXISTS "Allow hosts to update rooms" ON public.rooms;
+CREATE POLICY "Allow hosts to update rooms"
+ON public.rooms FOR UPDATE
+TO authenticated
+USING (auth.uid() = host_user_id)
+WITH CHECK (auth.uid() = host_user_id);
+
 CREATE POLICY "Allow authenticated users to insert room_players" 
 ON public.room_players FOR INSERT 
 TO authenticated 

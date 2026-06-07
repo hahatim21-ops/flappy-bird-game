@@ -12,6 +12,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { View, StyleSheet, Text, Dimensions } from 'react-native';
 import { supabase } from '../lib/supabase';
 import FlappyBirdGame from '../FlappyBirdGame';
+import SeededRandom from '../lib/SeededRandom';
 
 const BIRD_START_X = 100; // Same as in FlappyBirdGame
 
