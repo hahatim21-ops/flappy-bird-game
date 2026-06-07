@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, TextInput } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, TextInput, ImageBackground } from 'react-native';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
+
+const loginBackground = require('../assets/login-background.png');
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
@@ -97,7 +99,13 @@ export default function LoginScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <ImageBackground
+      source={loginBackground}
+      style={styles.container}
+      imageStyle={styles.backgroundImage}
+      resizeMode="cover"
+    >
+      <View style={styles.overlay} />
       <View style={styles.content}>
         <Text style={styles.title}>Flappy Bird Game</Text>
         <Text style={styles.subtitle}>{isSignUp ? 'Create an account' : 'Sign in to play'}</Text>
@@ -154,31 +162,41 @@ export default function LoginScreen() {
           </Text>
         </TouchableOpacity>
       </View>
-    </View>
+    </ImageBackground>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#87CEEB', // Sky blue to match game theme
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
   },
+  backgroundImage: {
+    width: '100%',
+    height: '100%',
+  },
+  overlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.2)',
+  },
   content: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: 'rgba(255, 255, 255, 0.97)',
     borderRadius: 15,
     padding: 30,
     alignItems: 'center',
     minWidth: 300,
     maxWidth: 400,
     width: '100%',
+    zIndex: 1,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    elevation: 5,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 8,
+    elevation: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.8)',
   },
   title: {
     fontSize: 32,
