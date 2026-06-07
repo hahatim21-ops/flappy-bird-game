@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, TextInput } from 'react-native';
-import { supabase } from '../lib/supabase';
+import { supabase, isSupabaseConfigured } from '../lib/supabase';
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
@@ -13,6 +13,12 @@ export default function LoginScreen() {
     try {
       setLoading(true);
       setError(null);
+
+      if (!isSupabaseConfigured) {
+        throw new Error(
+          'Supabase is not configured for this deployment. Add EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY in Vercel, then redeploy.'
+        );
+      }
 
       if (!email || !password) {
         throw new Error('Please enter both email and password');
