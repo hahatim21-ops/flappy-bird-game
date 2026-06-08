@@ -1,3 +1,4 @@
+// Reversion commit to trigger Vercel deploy
 import React, { useEffect, useState } from 'react';
 import { View, ActivityIndicator, Text, StyleSheet, TouchableOpacity, StatusBar, Platform, Modal, Image } from 'react-native';
 import { supabase } from './lib/supabase';
