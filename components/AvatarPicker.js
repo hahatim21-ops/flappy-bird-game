@@ -74,10 +74,18 @@ const AvatarPicker = ({ roomId, onAvatarSelected }) => {
         return;
       }
 
-      // Update player's avatar in room_players
+      const playerName = user.user_metadata?.player_name ||
+                         user.user_metadata?.full_name ||
+                         user.email?.split('@')[0] ||
+                         'Player';
+
+      // Update player's avatar and name in room_players
       const { error } = await supabase
         .from('room_players')
-        .update({ avatar: selectedAvatar })
+        .update({ 
+          avatar: selectedAvatar,
+          player_name: playerName,
+        })
         .eq('room_id', roomId)
         .eq('user_id', user.id);
 

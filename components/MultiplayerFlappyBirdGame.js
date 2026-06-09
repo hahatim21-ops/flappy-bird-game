@@ -46,47 +46,7 @@ const getAvatarUrl = (avatarId) => {
 
 const BIRD_START_X = 100; // Same as in FlappyBirdGame
 
-/**
- * Ghost Bird Component - renders other players' birds
- * Never affects collisions (rendered as overlay)
- */
-const GhostBird = ({ player, screenHeight }) => {
-  if (!player || player.is_alive === false) return null;
 
-  const avatarId = player.avatar || 'bird';
-  const avatarSource = AVATAR_SOURCES[avatarId] || AVATAR_SOURCES.bird;
-  const birdSize = getBirdSize(avatarId);
-
-  const birdY = player.bird_y !== null && player.bird_y !== undefined 
-    ? player.bird_y 
-    : screenHeight / 2; // Default position if not set
-
-  const rotation = player.rotation !== undefined ? player.rotation : 0;
-
-  return (
-    <View
-      style={[
-        styles.ghostBirdContainer,
-        {
-          width: birdSize,
-          height: birdSize,
-          left: BIRD_START_X,
-          top: birdY,
-          transform: [{ rotate: `${rotation}deg` }],
-        },
-      ]}
-    >
-      <Image
-        source={avatarSource}
-        style={styles.ghostBirdImage}
-        resizeMode="contain"
-      />
-      <View style={styles.playerNameLabelContainer}>
-        <Text style={styles.playerNameLabel}>{player.player_name || 'Player'}</Text>
-      </View>
-    </View>
-  );
-};
 
 const MultiplayerFlappyBirdGame = ({ roomId, localUserId, onGameEnd, onBack }) => {
   const [players, setPlayers] = useState([]);
@@ -339,21 +299,8 @@ const MultiplayerFlappyBirdGame = ({ roomId, localUserId, onGameEnd, onBack }) =
         avatarId={localPlayer?.avatar || 'bird'}
         seededRandom={seededRandom} // Pass seeded random for synchronized coin generation
         onScoreChange={handleScoreChange}
-        onBirdYChange={handleBirdYChange}
         onDeath={handleDeath}
       />
-
-      {/* Overlay: Render other players' ghost birds */}
-      {/* These are rendered on top but never affect collisions */}
-      <View style={styles.ghostBirdsOverlay} pointerEvents="box-none">
-        {otherPlayers.map((player) => (
-          <GhostBird
-            key={player.id}
-            player={player}
-            screenHeight={screenHeight}
-          />
-        ))}
-      </View>
 
       {/* Live Scoreboard Overlay */}
       <View style={styles.scoreboardContainer}>
@@ -415,42 +362,7 @@ const styles = StyleSheet.create({
     flex: 1,
     position: 'relative',
   },
-  ghostBirdsOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    zIndex: 500, // Above game but below UI
-    pointerEvents: 'box-none', // Don't intercept touches
-  },
-  ghostBirdContainer: {
-    position: 'absolute',
-    backgroundColor: 'transparent',
-    overflow: 'visible',
-    opacity: 0.5, // Semi-transparent for ghost birds
-  },
-  ghostBirdImage: {
-    width: '100%',
-    height: '100%',
-    backgroundColor: 'transparent',
-  },
-  playerNameLabelContainer: {
-    position: 'absolute',
-    top: -20,
-    left: 0,
-    right: 0,
-    alignItems: 'center',
-  },
-  playerNameLabel: {
-    fontSize: 12,
-    color: '#FFFFFF',
-    fontWeight: 'bold',
-    textShadowColor: '#000000',
-    textShadowOffset: { width: 1, height: 1 },
-    textShadowRadius: 2,
-    textAlign: 'center',
-  },
+
   scoreboardContainer: {
     position: 'absolute',
     top: 110, // Below the userBar

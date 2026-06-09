@@ -63,6 +63,7 @@ const addPlayerRecord = async (roomId, user) => {
     {
       room_id: roomId,
       user_id: user.id,
+      player_name: playerName,
       avatar: 'yellow',
       score: 0,
       is_alive: true,
@@ -70,6 +71,7 @@ const addPlayerRecord = async (roomId, user) => {
     {
       room_id: roomId,
       user_id: user.id,
+      player_name: playerName,
       avatar_color: 'yellow',
       score: 0,
       is_alive: true,
@@ -77,6 +79,7 @@ const addPlayerRecord = async (roomId, user) => {
     {
       room_id: roomId,
       user_id: user.id,
+      player_name: playerName,
       score: 0,
       is_alive: true,
     },
