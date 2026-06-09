@@ -2,12 +2,12 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   StyleSheet,
-  Dimensions,
   TouchableWithoutFeedback,
   Text,
   StatusBar,
   Image,
   Platform,
+  useWindowDimensions,
 } from 'react-native';
 import Bird from './components/Bird';
 import Pipe from './components/Pipe';
@@ -42,8 +42,8 @@ const BIRD_SIZE = 100; // Size of the bird container (width and height in pixels
 // In 100px container with resizeMode="contain", visible bird is ~40-50px
 // Use precise collision box (40px) to match the visible bird core
 // Collision ONLY when bird's base/body visually touches pipe, not on gaps
-const BIRD_COLLISION_SIZE = 40; // Collision box size - matches visible bird core
-const BIRD_COLLISION_OFFSET = 30; // Offset to center collision box (100 - 40) / 2 = 30px
+const BIRD_COLLISION_SIZE = 30; // Made slightly smaller (from 40) for fairer near-miss collision detection
+const BIRD_COLLISION_OFFSET = 35; // Centered: (100 - 30) / 2 = 35px
 const BIRD_START_X = 100; // Starting horizontal position of the bird
 const FIRST_PIPE_DELAY = 500; // Delay before first pipe appears (milliseconds)
 const MIN_TOP_PIPE_HEIGHT = 60; // Minimum height of top pipe (pixels)
@@ -93,9 +93,9 @@ const FlappyBirdGame = ({
   height,
 }) => {
   // Get screen dimensions for responsive design
-  const screenData = Dimensions.get('window');
-  const screenWidth = width || screenData.width || 800; // Fallback if undefined
-  const screenHeight = height || screenData.height || 600; // Fallback if undefined
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
+  const screenWidth = width || windowWidth || 800;
+  const screenHeight = height || windowHeight || 600;
 
   // Get difficulty settings (default to easy/original speed if invalid)
   const difficultySettings = DIFFICULTY_SETTINGS[difficulty] || DIFFICULTY_SETTINGS.easy;
@@ -811,7 +811,7 @@ const FlappyBirdGame = ({
   }, [initGame, startGame]);
 
   return (
-    <TouchableWithoutFeedback onPress={handleFlap}>
+    <TouchableWithoutFeedback onPressIn={handleFlap}>
       <View style={styles.container}>
         <StatusBar hidden />
         
