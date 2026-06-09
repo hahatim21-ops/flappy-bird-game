@@ -192,12 +192,32 @@ TO authenticated
 USING (auth.uid() = user_id);
 
 -- 6. Enable Realtime Replication for Synchronization
-BEGIN;
-  -- Remove existing publications if they exist to avoid unique constraint violations
-  ALTER PUBLICATION supabase_realtime DROP TABLE IF EXISTS public.rooms;
-  ALTER PUBLICATION supabase_realtime DROP TABLE IF EXISTS public.room_players;
-  
-  -- Add tables to publication
-  ALTER PUBLICATION supabase_realtime ADD TABLE public.rooms;
-  ALTER PUBLICATION supabase_realtime ADD TABLE public.room_players;
-COMMIT;
+DO $$
+BEGIN
+  -- Safely drop tables from publication (ignoring error if they weren't in it)
+  BEGIN
+    ALTER PUBLICATION supabase_realtime DROP TABLE public.rooms;
+  EXCEPTION WHEN OTHERS THEN
+    NULL;
+  END;
+
+  BEGIN
+    ALTER PUBLICATION supabase_realtime DROP TABLE public.room_players;
+  EXCEPTION WHEN OTHERS THEN
+    NULL;
+  END;
+
+  -- Add tables back to publication
+  BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.rooms;
+  EXCEPTION WHEN OTHERS THEN
+    NULL;
+  END;
+
+  BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.room_players;
+  EXCEPTION WHEN OTHERS THEN
+    NULL;
+  END;
+END $$;
+
