@@ -187,8 +187,8 @@ const FlappyBirdGame = ({
   // Calculate dynamic pipe gap based on difficulty (at least 180px or multiplier% of screen height, whichever is larger)
   const PIPE_GAP = Math.max(180, screenHeight * PIPE_GAP_MULTIPLIER);
   
-  // Calculate dynamic pipe spacing (15% of screen width)
-  const PIPE_SPACING = screenWidth * 0.15;
+  // Calculate dynamic pipe spacing (15% of screen width, minimum 180px to prevent overlaps on mobile)
+  const PIPE_SPACING = Math.max(180, screenWidth * 0.15);
 
   /**
    * Initialize sounds - load audio files on component mount
@@ -273,7 +273,7 @@ const FlappyBirdGame = ({
     
     // Generate initial pipes immediately when game starts
     const pipeGap = Math.max(180, screenHeight * PIPE_GAP_MULTIPLIER);
-    const pipeSpacing = screenWidth * 0.15;
+    const pipeSpacing = Math.max(180, screenWidth * 0.15);
     const minGapY = MIN_TOP_PIPE_HEIGHT;
     const maxGapY = screenHeight - pipeGap - MIN_BOTTOM_PIPE_HEIGHT;
     const validMaxGapY = Math.max(minGapY, maxGapY);
@@ -598,8 +598,8 @@ const FlappyBirdGame = ({
             ? Math.max(...newPipes.map((p) => p.x))
             : screenWidth; // Default to screenWidth if no pipes exist
 
-          // Calculate dynamic pipe spacing (15% of screen width) - consistent for all pipes
-          const pipeSpacing = screenWidth * 0.15;
+          // Calculate dynamic pipe spacing (15% of screen width, minimum 180px to prevent overlaps on mobile)
+          const pipeSpacing = Math.max(180, screenWidth * 0.15);
 
           // Generate new pipe when rightmost pipe is within spawn range
           // Spawn new pipe at rightmostPipe + pipeSpacing to maintain equal spacing
