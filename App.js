@@ -1,6 +1,6 @@
 // Reversion commit to trigger Vercel deploy
 import React, { useEffect, useState } from 'react';
-import { View, ActivityIndicator, Text, StyleSheet, TouchableOpacity, StatusBar, Platform, Modal, Image } from 'react-native';
+import { View, ActivityIndicator, Text, StyleSheet, TouchableOpacity, StatusBar, Platform, Modal, Image, TextInput } from 'react-native';
 import { supabase } from './lib/supabase';
 import LoginScreen from './components/LoginScreen';
 import ProfileSetup from './components/ProfileSetup';
@@ -74,6 +74,12 @@ export default function App() {
   const [selectedDifficulty, setSelectedDifficulty] = useState('easy'); // 'easy', 'medium', 'hard'
   const [isGameActive, setIsGameActive] = useState(false); // True when bird is flying/playing
 
+  // Password Reset state
+  const [showPasswordResetModal, setShowPasswordResetModal] = useState(false);
+  const [newPassword, setNewPassword] = useState('');
+  const [resettingPassword, setResettingPassword] = useState(false);
+  const [resetError, setResetError] = useState(null);
+
   // Load Google Fonts for pixelated text (web only)
   useEffect(() => {
     if (Platform.OS === 'web' && typeof document !== 'undefined') {
@@ -135,7 +141,10 @@ export default function App() {
 
       // Listen for auth state changes (only updates, doesn't block loading)
       const { data: listener } = supabase.auth.onAuthStateChange(
-        (_event, session) => {
+        (event, session) => {
+          if (event === 'PASSWORD_RECOVERY') {
+            setShowPasswordResetModal(true);
+          }
           // Don't set loading here, just update session
           setSession(session);
           const currentUser = session?.user ?? null;
@@ -313,6 +322,28 @@ export default function App() {
     setShowDifficultySelector(false);
   };
 
+  const handleUpdatePassword = async () => {
+    try {
+      setResettingPassword(true);
+      setResetError(null);
+      if (!newPassword || newPassword.length < 6) {
+        throw new Error('Password must be at least 6 characters');
+      }
+      const { error } = await supabase.auth.updateUser({
+        password: newPassword,
+      });
+      if (error) throw error;
+      
+      alert('Password updated successfully! You are now logged in.');
+      setShowPasswordResetModal(false);
+      setNewPassword('');
+    } catch (err) {
+      setResetError(err.message || 'Failed to update password');
+    } finally {
+      setResettingPassword(false);
+    }
+  };
+
   return (
     <>
       <StatusBar hidden />
@@ -482,6 +513,49 @@ export default function App() {
                 onPress={() => setShowAvatarPicker(false)}
               >
                 <Text style={styles.closeButtonText}>Close</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
+
+        {/* Password Reset Modal */}
+        <Modal
+          visible={showPasswordResetModal}
+          transparent={true}
+          animationType="fade"
+          onRequestClose={() => setShowPasswordResetModal(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <Text style={styles.modalTitle}>Set New Password</Text>
+              <Text style={styles.avatarName}>Enter your new password below (min. 6 characters)</Text>
+              
+              {resetError && (
+                <View style={styles.errorContainer}>
+                  <Text style={styles.errorText}>{resetError}</Text>
+                </View>
+              )}
+
+              <TextInput
+                style={styles.modalInput}
+                placeholder="New Password"
+                placeholderTextColor="#999999"
+                value={newPassword}
+                onChangeText={setNewPassword}
+                secureTextEntry
+                autoCapitalize="none"
+              />
+
+              <TouchableOpacity
+                style={[styles.chooseLevelButton, { minWidth: 200 }]}
+                onPress={handleUpdatePassword}
+                disabled={resettingPassword}
+              >
+                {resettingPassword ? (
+                  <ActivityIndicator color="#FFFFFF" />
+                ) : (
+                  <Text style={styles.chooseLevelText}>Update Password</Text>
+                )}
               </TouchableOpacity>
             </View>
           </View>
@@ -697,5 +771,28 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 24,
     fontWeight: 'bold',
+  },
+  errorContainer: {
+    backgroundColor: '#FFEBEE',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 20,
+    width: '100%',
+  },
+  errorText: {
+    color: '#C62828',
+    fontSize: 14,
+    textAlign: 'center',
+  },
+  modalInput: {
+    width: '100%',
+    backgroundColor: '#F5F5F5',
+    paddingHorizontal: 15,
+    paddingVertical: 12,
+    borderRadius: 8,
+    fontSize: 16,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
   },
 });

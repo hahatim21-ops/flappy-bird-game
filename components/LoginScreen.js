@@ -13,6 +13,38 @@ export default function LoginScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [isSignUp, setIsSignUp] = useState(false);
+  const [isForgotPassword, setIsForgotPassword] = useState(false);
+
+  const handleForgotPassword = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      if (!isSupabaseConfigured) {
+        throw new Error(
+          'Supabase is not configured for this deployment. Add EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY in Vercel, then redeploy.'
+        );
+      }
+
+      if (!email) {
+        throw new Error('Please enter your email address');
+      }
+
+      const redirectTo = Platform.OS === 'web' ? window.location.origin : undefined;
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: redirectTo,
+      });
+
+      if (error) throw error;
+
+      setError('✅ Password reset link sent! Check your email.');
+      setLoading(false);
+    } catch (err) {
+      console.error('Forgot password error:', err);
+      setError(err.message || 'Failed to send reset link.');
+      setLoading(false);
+    }
+  };
 
   const handleLogin = async () => {
     try {
@@ -111,7 +143,11 @@ export default function LoginScreen() {
       <View style={styles.overlay} />
       <View style={styles.content}>
         <Text style={styles.title}>Flappy Bird Game</Text>
-        <Text style={styles.subtitle}>{isSignUp ? 'Create an account' : 'Sign in to play'}</Text>
+        <Text style={styles.subtitle}>
+          {isForgotPassword 
+            ? 'Reset password' 
+            : (isSignUp ? 'Create an account' : 'Sign in to play')}
+        </Text>
 
         {error && (
           <View style={styles.errorContainer}>
@@ -130,38 +166,60 @@ export default function LoginScreen() {
           autoComplete="email"
         />
 
-        <TextInput
-          style={styles.input}
-          placeholder="Password"
-          placeholderTextColor="#999999"
-          value={password}
-          onChangeText={setPassword}
-          secureTextEntry
-          autoCapitalize="none"
-          autoComplete="password"
-        />
+        {!isForgotPassword && (
+          <TextInput
+            style={styles.input}
+            placeholder="Password"
+            placeholderTextColor="#999999"
+            value={password}
+            onChangeText={setPassword}
+            secureTextEntry
+            autoCapitalize="none"
+            autoComplete="password"
+          />
+        )}
+
+        {!isForgotPassword && !isSignUp && (
+          <TouchableOpacity 
+            style={styles.forgotPasswordButton}
+            onPress={() => {
+              setIsForgotPassword(true);
+              setError(null);
+            }}
+          >
+            <Text style={styles.forgotPasswordText}>Forgot password?</Text>
+          </TouchableOpacity>
+        )}
 
         <TouchableOpacity
           style={[styles.button, loading && styles.buttonDisabled]}
-          onPress={handleLogin}
+          onPress={isForgotPassword ? handleForgotPassword : handleLogin}
           disabled={loading}
         >
           {loading ? (
             <ActivityIndicator color="#FFFFFF" />
           ) : (
-            <Text style={styles.buttonText}>{isSignUp ? 'Sign Up' : 'Login'}</Text>
+            <Text style={styles.buttonText}>
+              {isForgotPassword ? 'Send Reset Link' : (isSignUp ? 'Sign Up' : 'Login')}
+            </Text>
           )}
         </TouchableOpacity>
 
         <TouchableOpacity
           style={styles.switchButton}
           onPress={() => {
-            setIsSignUp(!isSignUp);
+            if (isForgotPassword) {
+              setIsForgotPassword(false);
+            } else {
+              setIsSignUp(!isSignUp);
+            }
             setError(null);
           }}
         >
           <Text style={styles.switchText}>
-            {isSignUp ? 'Already have an account? Sign in' : "Don't have an account? Sign up"}
+            {isForgotPassword 
+              ? 'Back to Login' 
+              : (isSignUp ? 'Already have an account? Sign in' : "Don't have an account? Sign up")}
           </Text>
         </TouchableOpacity>
       </View>
@@ -261,5 +319,15 @@ const styles = StyleSheet.create({
     color: '#C62828',
     fontSize: 14,
     textAlign: 'center',
+  },
+  forgotPasswordButton: {
+    alignSelf: 'flex-end',
+    marginBottom: 15,
+    marginTop: -5,
+  },
+  forgotPasswordText: {
+    color: '#4285F4',
+    fontSize: 13,
+    textDecorationLine: 'underline',
   },
 });
