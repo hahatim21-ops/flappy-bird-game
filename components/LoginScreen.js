@@ -245,11 +245,10 @@ const styles = StyleSheet.create({
   content: {
     backgroundColor: 'rgba(255, 255, 255, 0.97)',
     borderRadius: 15,
-    padding: 30,
+    padding: 24, // Optimized padding for smaller devices
     alignItems: 'center',
-    minWidth: 300,
     maxWidth: 400,
-    width: '100%',
+    width: '90%',
     zIndex: 1,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },

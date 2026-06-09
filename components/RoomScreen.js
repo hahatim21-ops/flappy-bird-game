@@ -348,11 +348,10 @@ const styles = StyleSheet.create({
   content: {
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
-    padding: 24,
+    padding: 20, // Optimized padding for smaller devices
     alignItems: 'center',
-    minWidth: 350,
     maxWidth: 500,
-    width: '100%',
+    width: '90%',
     maxHeight: '90%',
   },
   header: {

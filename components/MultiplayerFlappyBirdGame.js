@@ -9,7 +9,7 @@
  */
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { View, StyleSheet, Text, Dimensions, Image } from 'react-native';
+import { View, StyleSheet, Text, Image, useWindowDimensions, TouchableOpacity, Platform } from 'react-native';
 import { supabase } from '../lib/supabase';
 import FlappyBirdGame from '../FlappyBirdGame';
 import SeededRandom from '../lib/SeededRandom';
@@ -105,7 +105,15 @@ const MultiplayerFlappyBirdGame = ({ roomId, localUserId, onGameEnd, onBack }) =
   const scoreRef = useRef(0);
   const isAliveRef = useRef(true);
   const lastBroadcastTimeRef = useRef(0);
-  const screenHeight = Dimensions.get('window').height;
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
+  const [isLeaderboardExpanded, setIsLeaderboardExpanded] = useState(false);
+
+  // Auto-collapse leaderboard when game starts playing
+  useEffect(() => {
+    if (localGameState === 'playing') {
+      setIsLeaderboardExpanded(false);
+    }
+  }, [localGameState]);
 
   useEffect(() => {
     if (!roomId || !localUserId) return;
@@ -369,57 +377,75 @@ const MultiplayerFlappyBirdGame = ({ roomId, localUserId, onGameEnd, onBack }) =
         </View>
       )}
 
+      {/* Mobile Leaderboard Toggle Button */}
+      {screenWidth < 600 && (
+        <TouchableOpacity
+          style={styles.leaderboardToggleButton}
+          onPress={() => setIsLeaderboardExpanded(prev => !prev)}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.leaderboardToggleButtonText}>
+            🏆 {isLeaderboardExpanded ? 'Hide' : 'Scores'}
+          </Text>
+        </TouchableOpacity>
+      )}
+
       {/* Live Scoreboard Overlay */}
-      <View style={styles.scoreboardContainer}>
-        <Text style={styles.scoreboardTitle}>LEADERBOARD</Text>
-        {[...players]
-          .sort((a, b) => {
-            if (b.score !== a.score) {
-              return b.score - a.score;
-            }
-            if (a.is_alive && !b.is_alive) return -1;
-            if (!a.is_alive && b.is_alive) return 1;
-            return 0;
-          })
-          .map((player, index) => {
-            const isSelf = player.user_id === localUserId;
-            const avatarId = player.avatar || 'bird';
-            const avatarSource = AVATAR_SOURCES[avatarId] || AVATAR_SOURCES.bird;
-            
-            return (
-              <View 
-                key={player.id} 
-                style={[
-                  styles.scoreboardRow,
-                  isSelf && styles.scoreboardRowSelf
-                ]}
-              >
-                <Text style={styles.scoreboardRank}>#{index + 1}</Text>
-                <Image 
-                  source={avatarSource} 
-                  style={styles.scoreboardAvatar}
-                  resizeMode="contain"
-                />
-                <Text 
-                  numberOfLines={1} 
+      {((screenWidth >= 600) || isLeaderboardExpanded) && (
+        <View style={[
+          styles.scoreboardContainer,
+          screenWidth < 600 && styles.scoreboardContainerMobile
+        ]}>
+          <Text style={styles.scoreboardTitle}>LEADERBOARD</Text>
+          {[...players]
+            .sort((a, b) => {
+              if (b.score !== a.score) {
+                return b.score - a.score;
+              }
+              if (a.is_alive && !b.is_alive) return -1;
+              if (!a.is_alive && b.is_alive) return 1;
+              return 0;
+            })
+            .map((player, index) => {
+              const isSelf = player.user_id === localUserId;
+              const avatarId = player.avatar || 'bird';
+              const avatarSource = AVATAR_SOURCES[avatarId] || AVATAR_SOURCES.bird;
+              
+              return (
+                <View 
+                  key={player.id} 
                   style={[
-                    styles.scoreboardName,
-                    isSelf && styles.scoreboardNameSelf
+                    styles.scoreboardRow,
+                    isSelf && styles.scoreboardRowSelf
                   ]}
                 >
-                  {player.player_name || 'Player'}
-                </Text>
-                <View style={styles.statusAndScore}>
-                  <View style={[
-                    styles.statusDot,
-                    { backgroundColor: player.is_alive ? '#4CAF50' : '#F44336' }
-                  ]} />
-                  <Text style={styles.scoreboardScore}>{player.score || 0}</Text>
+                  <Text style={styles.scoreboardRank}>#{index + 1}</Text>
+                  <Image 
+                    source={avatarSource} 
+                    style={styles.scoreboardAvatar}
+                    resizeMode="contain"
+                  />
+                  <Text 
+                    numberOfLines={1} 
+                    style={[
+                      styles.scoreboardName,
+                      isSelf && styles.scoreboardNameSelf
+                    ]}
+                  >
+                    {player.player_name || 'Player'}
+                  </Text>
+                  <View style={styles.statusAndScore}>
+                    <View style={[
+                      styles.statusDot,
+                      { backgroundColor: player.is_alive ? '#4CAF50' : '#F44336' }
+                    ]} />
+                    <Text style={styles.scoreboardScore}>{player.score || 0}</Text>
+                  </View>
                 </View>
-              </View>
-            );
-          })}
-      </View>
+              );
+            })}
+        </View>
+      )}
     </View>
   );
 };
@@ -432,7 +458,7 @@ const styles = StyleSheet.create({
 
   scoreboardContainer: {
     position: 'absolute',
-    top: 110, // Below the userBar
+    top: 20, // Moved up since userBar is hidden during play
     right: 15,
     backgroundColor: 'rgba(0, 0, 0, 0.6)',
     borderRadius: 12,
@@ -441,6 +467,30 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.2)',
     zIndex: 1000,
+  },
+  scoreboardContainerMobile: {
+    top: 60, // Positioned below the toggle button on mobile
+    backgroundColor: 'rgba(0, 0, 0, 0.85)', // Higher opacity on mobile
+    width: 180, // Slightly narrower on small screens
+  },
+  leaderboardToggleButton: {
+    position: 'absolute',
+    top: 15,
+    right: 15,
+    backgroundColor: 'rgba(0, 0, 0, 0.75)',
+    borderRadius: 20,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderColor: '#FFD700',
+    zIndex: 1001,
+    elevation: 5,
+  },
+  leaderboardToggleButtonText: {
+    color: '#FFD700',
+    fontSize: 10,
+    fontWeight: 'bold',
+    fontFamily: Platform.OS === 'web' ? '"Press Start 2P", monospace' : 'monospace',
   },
   scoreboardTitle: {
     fontSize: 12,

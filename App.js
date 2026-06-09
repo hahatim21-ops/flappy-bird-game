@@ -344,65 +344,69 @@ export default function App() {
     }
   };
 
+  const isGameplayActive = (gameMode === 'single' && isGameActive) || (gameMode === 'multiplayer' && multiplayerScreen === 'game');
+
   return (
     <>
       <StatusBar hidden />
       <View style={styles.gameContainer}>
-        {/* User info and logout button - improved styling */}
-        <View style={styles.userBar} pointerEvents="box-none">
-          <View style={styles.userInfo}>
-            <TouchableOpacity 
-              style={styles.avatarButton}
-              onPress={() => setShowAvatarPicker(true)}
-              activeOpacity={0.7}
-            >
-              <Image 
-                source={currentAvatarSource} 
-                style={styles.avatarPreview}
-                resizeMode="contain"
-              />
-              <Text style={styles.changeAvatarText}>✏️</Text>
-            </TouchableOpacity>
-            <Text style={styles.userText}>
-              {displayPlayerName}
-            </Text>
-            {gameMode === 'single' && !isGameActive && (
-              <TouchableOpacity
-                style={styles.multiplayerButton}
-                onPress={() => {
-                  setGameMode('multiplayer');
-                  setMultiplayerScreen(null);
-                }}
+        {/* User info and logout button - improved styling, hidden during active gameplay */}
+        {!isGameplayActive && (
+          <View style={styles.userBar} pointerEvents="box-none">
+            <View style={styles.userInfo}>
+              <TouchableOpacity 
+                style={styles.avatarButton}
+                onPress={() => setShowAvatarPicker(true)}
                 activeOpacity={0.7}
               >
-                <Text style={styles.multiplayerButtonText}>🎮 Multiplayer</Text>
+                <Image 
+                  source={currentAvatarSource} 
+                  style={styles.avatarPreview}
+                  resizeMode="contain"
+                />
+                <Text style={styles.changeAvatarText}>✏️</Text>
               </TouchableOpacity>
-            )}
-          </View>
-          <View style={styles.rightButtons}>
-            {gameMode === 'single' && !isGameActive && (
-              <TouchableOpacity
-                style={styles.chooseLevelButton}
-                onPress={() => setShowDifficultySelector(true)}
+              <Text style={styles.userText}>
+                {displayPlayerName}
+              </Text>
+              {gameMode === 'single' && !isGameActive && (
+                <TouchableOpacity
+                  style={styles.multiplayerButton}
+                  onPress={() => {
+                    setGameMode('multiplayer');
+                    setMultiplayerScreen(null);
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.multiplayerButtonText}>🎮 Multiplayer</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+            <View style={styles.rightButtons}>
+              {gameMode === 'single' && !isGameActive && (
+                <TouchableOpacity
+                  style={styles.chooseLevelButton}
+                  onPress={() => setShowDifficultySelector(true)}
+                  activeOpacity={0.7}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
+                  <Text style={styles.chooseLevelText}>Choose Level</Text>
+                </TouchableOpacity>
+              )}
+              <TouchableOpacity 
+                style={styles.logoutButton} 
+                onPress={() => {
+                  console.log('Logout button pressed');
+                  handleLogout();
+                }}
                 activeOpacity={0.7}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               >
-                <Text style={styles.chooseLevelText}>Choose Level</Text>
+                <Text style={styles.logoutText}>Logout</Text>
               </TouchableOpacity>
-            )}
-            <TouchableOpacity 
-              style={styles.logoutButton} 
-              onPress={() => {
-                console.log('Logout button pressed');
-                handleLogout();
-              }}
-              activeOpacity={0.7}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            >
-              <Text style={styles.logoutText}>Logout</Text>
-            </TouchableOpacity>
+            </View>
           </View>
-        </View>
+        )}
 
         {/* Routing: Single-player or Multiplayer */}
         {gameMode === 'single' && user && (

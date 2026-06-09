@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Platform } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Platform, useWindowDimensions } from 'react-native';
 
 /**
  * GameOver Component
@@ -11,6 +11,7 @@ import { View, Text, StyleSheet, TouchableOpacity, Platform } from 'react-native
  * - onRestart: function - Callback function to restart the game
  */
 const GameOver = ({ score, onRestart, isMultiplayer = false }) => {
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const [highScore, setHighScore] = useState(0);
   const [isNewHighScore, setIsNewHighScore] = useState(false);
 
@@ -51,18 +52,34 @@ const GameOver = ({ score, onRestart, isMultiplayer = false }) => {
       {/* Ground */}
       <View style={styles.ground} />
       
-      {/* Bird on Ground (decorative) */}
-      <View style={styles.groundBird}>
-        <View style={styles.birdBody} />
-        <View style={styles.birdEye} />
-        <View style={styles.birdBeak} />
-      </View>
+      {/* Bird on Ground (decorative) - hidden on short screens (e.g. landscape mobile) */}
+      {screenHeight >= 500 && (
+        <View style={styles.groundBird}>
+          <View style={styles.birdBody} />
+          <View style={styles.birdEye} />
+          <View style={styles.birdBeak} />
+        </View>
+      )}
       
       {/* GAME OVER Title */}
-      <Text style={styles.gameOverTitle}>GAME OVER</Text>
-
+      <Text style={[
+        styles.gameOverTitle,
+        {
+          fontSize: Math.max(22, Math.min(38, screenWidth * 0.095)),
+          marginBottom: screenHeight < 600 ? 10 : 20,
+        }
+      ]}>GAME OVER</Text>
+ 
       {/* Scoreboard Panel */}
-      <View style={styles.scoreboard}>
+      <View style={[
+        styles.scoreboard,
+        {
+          width: Math.min(340, screenWidth * 0.9),
+          minWidth: 260,
+          padding: screenHeight < 600 ? 12 : 20,
+          marginBottom: screenHeight < 600 ? 12 : 20,
+        }
+      ]}>
         {/* Left Side - Medal */}
         <View style={styles.medalSection}>
           <Text style={styles.medalLabel}>MEDAL</Text>
@@ -74,7 +91,7 @@ const GameOver = ({ score, onRestart, isMultiplayer = false }) => {
             </View>
           )}
         </View>
-
+ 
         {/* Right Side - Score */}
         <View style={styles.scoreSection}>
           <Text style={styles.scoreLabel}>SCORE</Text>
