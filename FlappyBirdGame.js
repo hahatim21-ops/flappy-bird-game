@@ -2,12 +2,12 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   StyleSheet,
+  Dimensions,
   TouchableWithoutFeedback,
   Text,
   StatusBar,
   Image,
   Platform,
-  useWindowDimensions,
 } from 'react-native';
 import Bird from './components/Bird';
 import Pipe from './components/Pipe';
@@ -91,7 +91,9 @@ const FlappyBirdGame = ({
   isMultiplayer = false,
 }) => {
   // Get screen dimensions for responsive design
-  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
+  const screenData = Dimensions.get('window');
+  const screenWidth = screenData.width || 800; // Fallback if undefined
+  const screenHeight = screenData.height || 600; // Fallback if undefined
 
   // Get difficulty settings (default to easy/original speed if invalid)
   const difficultySettings = DIFFICULTY_SETTINGS[difficulty] || DIFFICULTY_SETTINGS.easy;
@@ -183,8 +185,8 @@ const FlappyBirdGame = ({
   // Calculate dynamic pipe gap based on difficulty (at least 180px or multiplier% of screen height, whichever is larger)
   const PIPE_GAP = Math.max(180, screenHeight * PIPE_GAP_MULTIPLIER);
   
-  // Calculate dynamic pipe spacing (responsive, minimum 250px to prevent overlaps on mobile)
-  const PIPE_SPACING = Math.max(250, screenWidth * 0.45);
+  // Calculate dynamic pipe spacing (15% of screen width)
+  const PIPE_SPACING = screenWidth * 0.15;
 
   /**
    * Initialize sounds - load audio files on component mount
@@ -269,7 +271,7 @@ const FlappyBirdGame = ({
     
     // Generate initial pipes immediately when game starts
     const pipeGap = Math.max(180, screenHeight * PIPE_GAP_MULTIPLIER);
-    const pipeSpacing = Math.max(250, screenWidth * 0.45);
+    const pipeSpacing = screenWidth * 0.15;
     const minGapY = MIN_TOP_PIPE_HEIGHT;
     const maxGapY = screenHeight - pipeGap - MIN_BOTTOM_PIPE_HEIGHT;
     const validMaxGapY = Math.max(minGapY, maxGapY);
@@ -594,8 +596,8 @@ const FlappyBirdGame = ({
             ? Math.max(...newPipes.map((p) => p.x))
             : screenWidth; // Default to screenWidth if no pipes exist
 
-          // Calculate dynamic pipe spacing (responsive, minimum 250px to prevent overlaps on mobile)
-          const pipeSpacing = Math.max(250, screenWidth * 0.45);
+          // Calculate dynamic pipe spacing (15% of screen width) - consistent for all pipes
+          const pipeSpacing = screenWidth * 0.15;
 
           // Generate new pipe when rightmost pipe is within spawn range
           // Spawn new pipe at rightmostPipe + pipeSpacing to maintain equal spacing
