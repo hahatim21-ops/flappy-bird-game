@@ -89,11 +89,13 @@ const FlappyBirdGame = ({
   onStateChange,
   forceGameOver,
   isMultiplayer = false,
+  width,
+  height,
 }) => {
   // Get screen dimensions for responsive design
   const screenData = Dimensions.get('window');
-  const screenWidth = screenData.width || 800; // Fallback if undefined
-  const screenHeight = screenData.height || 600; // Fallback if undefined
+  const screenWidth = width || screenData.width || 800; // Fallback if undefined
+  const screenHeight = height || screenData.height || 600; // Fallback if undefined
 
   // Get difficulty settings (default to easy/original speed if invalid)
   const difficultySettings = DIFFICULTY_SETTINGS[difficulty] || DIFFICULTY_SETTINGS.easy;

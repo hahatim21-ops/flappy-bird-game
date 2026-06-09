@@ -349,8 +349,22 @@ const MultiplayerFlappyBirdGame = ({ roomId, localUserId, onGameEnd, onBack }) =
   const alivePlayersCount = players.filter(p => p.is_alive).length;
   const shouldForceGameOver = totalPlayersInRoom > 1 && alivePlayersCount === 1 && localIsAlive;
 
+  const targetWidth = 1200;
+  const isMobileSize = screenWidth < targetWidth;
+  const scaleFactor = isMobileSize ? screenWidth / targetWidth : 1;
+  const logicalWidth = isMobileSize ? targetWidth : screenWidth;
+  const logicalHeight = isMobileSize ? screenHeight / scaleFactor : screenHeight;
+
   return (
-    <View style={styles.container}>
+    <View style={isMobileSize ? {
+      width: targetWidth,
+      height: logicalHeight,
+      transform: [{ scale: scaleFactor }],
+      ...(Platform.OS === 'web' && { transformOrigin: 'top left' }),
+      position: 'absolute',
+      top: 0,
+      left: 0,
+    } : styles.container}>
       {/* Render FlappyBirdGame normally */}
       <FlappyBirdGame 
         avatarUrl={getAvatarUrl(localPlayer?.avatar || 'bird')}
@@ -362,6 +376,8 @@ const MultiplayerFlappyBirdGame = ({ roomId, localUserId, onGameEnd, onBack }) =
         onStateChange={setLocalGameState}
         forceGameOver={shouldForceGameOver}
         isMultiplayer={true}
+        width={logicalWidth}
+        height={logicalHeight}
       />
 
       {/* Overlay: Render other players' ghost birds only when we are playing */}
@@ -371,7 +387,7 @@ const MultiplayerFlappyBirdGame = ({ roomId, localUserId, onGameEnd, onBack }) =
             <GhostBird
               key={player.id}
               player={player}
-              screenHeight={screenHeight}
+              screenHeight={logicalHeight}
             />
           ))}
         </View>

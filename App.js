@@ -1,6 +1,6 @@
 // Reversion commit to trigger Vercel deploy
 import React, { useEffect, useState } from 'react';
-import { View, ActivityIndicator, Text, StyleSheet, TouchableOpacity, StatusBar, Platform, Modal, Image, TextInput } from 'react-native';
+import { View, ActivityIndicator, Text, StyleSheet, TouchableOpacity, StatusBar, Platform, Modal, Image, TextInput, useWindowDimensions } from 'react-native';
 import { supabase } from './lib/supabase';
 import LoginScreen from './components/LoginScreen';
 import ProfileSetup from './components/ProfileSetup';
@@ -56,6 +56,7 @@ const AVATAR_OPTIONS = [
 ];
 
 export default function App() {
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState(null);
@@ -409,14 +410,34 @@ export default function App() {
         )}
 
         {/* Routing: Single-player or Multiplayer */}
-        {gameMode === 'single' && user && (
-          <FlappyBirdGame 
-            avatarUrl={user?.user_metadata?.avatar_url} 
-            avatarId={user?.user_metadata?.avatar_id || 'bird'}
-            difficulty={selectedDifficulty}
-            onGameStateChange={setIsGameActive}
-          />
-        )}
+        {gameMode === 'single' && user && (() => {
+          const targetWidth = 1200;
+          const isMobileSize = screenWidth < targetWidth;
+          const scaleFactor = isMobileSize ? screenWidth / targetWidth : 1;
+          const logicalWidth = isMobileSize ? targetWidth : screenWidth;
+          const logicalHeight = isMobileSize ? screenHeight / scaleFactor : screenHeight;
+
+          return (
+            <View style={isMobileSize ? {
+              width: targetWidth,
+              height: logicalHeight,
+              transform: [{ scale: scaleFactor }],
+              ...(Platform.OS === 'web' && { transformOrigin: 'top left' }),
+              position: 'absolute',
+              top: 0,
+              left: 0,
+            } : { flex: 1 }}>
+              <FlappyBirdGame 
+                avatarUrl={user?.user_metadata?.avatar_url} 
+                avatarId={user?.user_metadata?.avatar_id || 'bird'}
+                difficulty={selectedDifficulty}
+                onGameStateChange={setIsGameActive}
+                width={logicalWidth}
+                height={logicalHeight}
+              />
+            </View>
+          );
+        })()}
 
 
         {/* Multiplayer screens */}
