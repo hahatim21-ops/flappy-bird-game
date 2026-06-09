@@ -64,14 +64,6 @@ const addPlayerRecord = async (roomId, user) => {
       room_id: roomId,
       user_id: user.id,
       player_name: playerName,
-      avatar: 'yellow',
-      score: 0,
-      is_alive: true,
-    },
-    {
-      room_id: roomId,
-      user_id: user.id,
-      player_name: playerName,
       avatar_color: 'yellow',
       score: 0,
       is_alive: true,
@@ -79,7 +71,20 @@ const addPlayerRecord = async (roomId, user) => {
     {
       room_id: roomId,
       user_id: user.id,
-      player_name: playerName,
+      avatar: 'yellow',
+      score: 0,
+      is_alive: true,
+    },
+    {
+      room_id: roomId,
+      user_id: user.id,
+      avatar_color: 'yellow',
+      score: 0,
+      is_alive: true,
+    },
+    {
+      room_id: roomId,
+      user_id: user.id,
       score: 0,
       is_alive: true,
     },
@@ -98,7 +103,9 @@ const addPlayerRecord = async (roomId, user) => {
 
 const LobbyScreen = ({ onJoinRoom, onBack }) => {
   const [roomCode, setRoomCode] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [joining, setJoining] = useState(false);
+  const [error, setError] = useState(null);
 
   /**
    * Generate a 6-character room code
@@ -116,12 +123,15 @@ const LobbyScreen = ({ onJoinRoom, onBack }) => {
    * Create a new room and auto-join creator
    */
   const handleCreateRoom = async () => {
+    if (creating || joining) return;
     try {
-      setLoading(true);
+      setCreating(true);
+      setError(null);
 
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
-        Alert.alert('Error', 'Please log in to create a room');
+        setError('Please log in to create a room.');
+        setCreating(false);
         return;
       }
 
@@ -164,32 +174,29 @@ const LobbyScreen = ({ onJoinRoom, onBack }) => {
       // Navigate to Avatar Picker
       onJoinRoom(room.id, true); // true = is host
 
-    } catch (error) {
-      console.error('Error creating room:', error);
-      console.error('Full error object:', JSON.stringify(error, null, 2));
+    } catch (err) {
+      console.error('Error creating room:', err);
       
-      // Show detailed error message
       let errorMessage = 'Failed to create room';
-      if (error.message) {
-        errorMessage = error.message;
-      } else if (error.toString) {
-        errorMessage = error.toString();
+      if (err.message) {
+        errorMessage = err.message;
+      } else if (err.toString) {
+        errorMessage = err.toString();
       }
       
-      // Add more context if available
-      if (error.code) {
-        errorMessage += ` (Code: ${error.code})`;
+      if (err.code) {
+        errorMessage += ` (Code: ${err.code})`;
       }
-      if (error.details) {
-        errorMessage += `\nDetails: ${error.details}`;
+      if (err.details) {
+        errorMessage += `\nDetails: ${err.details}`;
       }
-      if (error.hint) {
-        errorMessage += `\nHint: ${error.hint}`;
+      if (err.hint) {
+        errorMessage += `\nHint: ${err.hint}`;
       }
       
-      Alert.alert('Error Creating Room', errorMessage);
+      setError(errorMessage);
     } finally {
-      setLoading(false);
+      setCreating(false);
     }
   };
 
@@ -197,17 +204,20 @@ const LobbyScreen = ({ onJoinRoom, onBack }) => {
    * Join an existing room by code
    */
   const handleJoinRoom = async () => {
+    if (creating || joining) return;
     if (!roomCode || roomCode.length !== 6) {
-      Alert.alert('Invalid Code', 'Please enter a 6-character room code');
+      setError('Please enter a 6-character room code.');
       return;
     }
 
     try {
-      setLoading(true);
+      setJoining(true);
+      setError(null);
 
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
-        Alert.alert('Error', 'Please log in to join a room');
+        setError('Please log in to join a room.');
+        setJoining(false);
         return;
       }
 
@@ -221,7 +231,8 @@ const LobbyScreen = ({ onJoinRoom, onBack }) => {
 
       if (roomError) throw roomError;
       if (!rooms || rooms.length === 0) {
-        Alert.alert('Error', 'Room not found or already started');
+        setError('Room not found or already started.');
+        setJoining(false);
         return;
       }
 
@@ -238,7 +249,6 @@ const LobbyScreen = ({ onJoinRoom, onBack }) => {
       const existingPlayer = players?.find(p => p.user_id === user.id);
       if (existingPlayer) {
         // Already in room, go to avatar picker
-        // Host is determined by host_user_id from room
         const isHost = room.host_user_id === user.id || room.host_id === user.id;
         onJoinRoom(room.id, isHost);
         return;
@@ -248,17 +258,18 @@ const LobbyScreen = ({ onJoinRoom, onBack }) => {
       await addPlayerRecord(room.id, user);
 
       // Navigate to Avatar Picker
-      // Host is determined by host_user_id from room
       const isHost = room.host_user_id === user.id || room.host_id === user.id;
       onJoinRoom(room.id, isHost);
 
-    } catch (error) {
-      console.error('Error joining room:', error);
-      Alert.alert('Error', error.message || 'Failed to join room');
+    } catch (err) {
+      console.error('Error joining room:', err);
+      setError(err.message || 'Failed to join room.');
     } finally {
-      setLoading(false);
+      setJoining(false);
     }
   };
+
+  const isAnyLoading = creating || joining;
 
   return (
     <View style={styles.container}>
@@ -266,12 +277,18 @@ const LobbyScreen = ({ onJoinRoom, onBack }) => {
         <Text style={styles.title}>Multiplayer Flappy Bird</Text>
         <Text style={styles.subtitle}>Play with friends!</Text>
 
+        {error && (
+          <View style={styles.errorContainer}>
+            <Text style={styles.errorText}>{error}</Text>
+          </View>
+        )}
+
         <TouchableOpacity
-          style={[styles.button, styles.createButton, loading && styles.buttonDisabled]}
+          style={[styles.button, styles.createButton, isAnyLoading && styles.buttonDisabled]}
           onPress={handleCreateRoom}
-          disabled={loading}
+          disabled={isAnyLoading}
         >
-          {loading ? (
+          {creating ? (
             <ActivityIndicator color="#FFFFFF" />
           ) : (
             <Text style={styles.buttonText}>Create Room</Text>
@@ -292,15 +309,15 @@ const LobbyScreen = ({ onJoinRoom, onBack }) => {
           onChangeText={(text) => setRoomCode(text.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6))}
           maxLength={6}
           autoCapitalize="characters"
-          editable={!loading}
+          editable={!isAnyLoading}
         />
 
         <TouchableOpacity
-          style={[styles.button, styles.joinButton, loading && styles.buttonDisabled]}
+          style={[styles.button, styles.joinButton, isAnyLoading && styles.buttonDisabled]}
           onPress={handleJoinRoom}
-          disabled={loading}
+          disabled={isAnyLoading}
         >
-          {loading ? (
+          {joining ? (
             <ActivityIndicator color="#FFFFFF" />
           ) : (
             <Text style={styles.buttonText}>Join Room</Text>
@@ -311,7 +328,7 @@ const LobbyScreen = ({ onJoinRoom, onBack }) => {
           <TouchableOpacity
             style={styles.backButton}
             onPress={onBack}
-            disabled={loading}
+            disabled={isAnyLoading}
           >
             <Text style={styles.backButtonText}>← Back to Game</Text>
           </TouchableOpacity>
@@ -414,6 +431,18 @@ const styles = StyleSheet.create({
   backButtonText: {
     color: '#666666',
     fontSize: 14,
+  },
+  errorContainer: {
+    backgroundColor: '#FFEBEE',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 20,
+    width: '100%',
+  },
+  errorText: {
+    color: '#C62828',
+    fontSize: 14,
+    textAlign: 'center',
   },
 });
 
