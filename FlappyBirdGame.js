@@ -77,7 +77,16 @@ const COIN_COLLISION_SIZE = 35; // Collision box size for coins (slightly smalle
 const MIN_COIN_DISTANCE = 500; // Minimum distance between coins (pixels)
 const COIN_SPAWN_CHANCE = 0.3; // 30% chance to spawn a coin when distance requirement is met
 
-const FlappyBirdGame = ({ avatarUrl, avatarId = 'bird', seededRandom = null, difficulty = 'easy', onGameStateChange }) => {
+const FlappyBirdGame = ({
+  avatarUrl,
+  avatarId = 'bird',
+  seededRandom = null,
+  difficulty = 'easy',
+  onGameStateChange,
+  onScoreChange,
+  onBirdYChange,
+  onDeath,
+}) => {
   // Get screen dimensions for responsive design
   const screenData = Dimensions.get('window');
   const screenWidth = screenData.width || 800; // Fallback if undefined
@@ -131,6 +140,13 @@ const FlappyBirdGame = ({ avatarUrl, avatarId = 'bird', seededRandom = null, dif
       onGameStateChange(isActive);
     }
   }, [gameState, onGameStateChange]);
+
+  // Notify parent of score change
+  useEffect(() => {
+    if (typeof onScoreChange === 'function') {
+      onScoreChange(score);
+    }
+  }, [score, onScoreChange]);
 
   // Refs to track animation frame and game loop
   const gameLoopRef = useRef(null);
@@ -483,6 +499,12 @@ const FlappyBirdGame = ({ avatarUrl, avatarId = 'bird', seededRandom = null, dif
       setBirdPosition((prevPos) => {
         const newY = prevPos.y + newVelocity;
 
+        // Notify parent of position change
+        if (typeof onBirdYChange === 'function' && !isInHitState) {
+          const rotation = Math.min(Math.max(newVelocity * 5, -30), 90);
+          onBirdYChange(newY, rotation);
+        }
+
         // Check for screen boundary collisions (only in 'playing' state)
         if (!isInHitState) {
           const collisionY = newY + BIRD_COLLISION_OFFSET;
@@ -490,6 +512,9 @@ const FlappyBirdGame = ({ avatarUrl, avatarId = 'bird', seededRandom = null, dif
           if (collisionY <= 0 || collisionY + BIRD_COLLISION_SIZE >= screenHeight) {
             // Bird hit screen boundary - transition to HIT state
             setGameState('hit');
+            if (typeof onDeath === 'function') {
+              onDeath(newY);
+            }
             // Play die sound (only once)
             if (!hasPlayedDieSoundRef.current && dieSoundRef.current) {
               hasPlayedDieSoundRef.current = true;
@@ -617,6 +642,9 @@ const FlappyBirdGame = ({ avatarUrl, avatarId = 'bird', seededRandom = null, dif
             // Bird hit pillar - transition to HIT state (not gameOver yet)
             // In HIT state: pipes stop, bird continues falling
             setGameState('hit');
+            if (typeof onDeath === 'function') {
+              onDeath(newY);
+            }
             // Play die sound (only once)
             if (!hasPlayedDieSoundRef.current && dieSoundRef.current) {
               hasPlayedDieSoundRef.current = true;
@@ -669,7 +697,7 @@ const FlappyBirdGame = ({ avatarUrl, avatarId = 'bird', seededRandom = null, dif
 
     // Continue the game loop
     gameLoopRef.current = requestAnimationFrame(gameLoop);
-  }, [gameState, screenWidth, screenHeight, checkCollision, checkCoinCollision, nextPipeId, nextCoinId]);
+  }, [gameState, screenWidth, screenHeight, checkCollision, checkCoinCollision, nextPipeId, nextCoinId, onBirdYChange, onDeath]);
 
   /**
    * Start the game loop when game state changes to 'playing' or 'hit'

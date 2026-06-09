@@ -9,24 +9,42 @@
  */
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { View, StyleSheet, Text, Dimensions } from 'react-native';
+import { View, StyleSheet, Text, Dimensions, Image } from 'react-native';
 import { supabase } from '../lib/supabase';
 import FlappyBirdGame from '../FlappyBirdGame';
 import SeededRandom from '../lib/SeededRandom';
 
-const BIRD_START_X = 100; // Same as in FlappyBirdGame
+// Import local penguin, flamingo, red, and mighty eagle avatars
+const penguinAvatar = require('../assets/penguin-avatar.png');
+const flamingoAvatar = require('../assets/flamingo-avatar.png');
+const redAvatar = require('../assets/red-avatar.png');
+const mightyEagleAvatar = require('../assets/mighty-eagle-avatar.png');
 
-// Avatar color mapping
-const AVATAR_COLORS = {
-  yellow: '#FFD700',
-  red: '#FF4444',
-  blue: '#4444FF',
-  green: '#44FF44',
-  orange: '#FF8844',
-  purple: '#AA44FF',
-  pink: '#FF44AA',
-  cyan: '#44FFFF',
+const AVATAR_SOURCES = {
+  bird: { uri: 'https://www.pngall.com/wp-content/uploads/15/Flappy-Bird-PNG-Free-Image.png' },
+  red: redAvatar,
+  penguin: penguinAvatar,
+  flamingo: flamingoAvatar,
+  'mighty-eagle': mightyEagleAvatar,
 };
+
+const getBirdSize = (avatarId) => {
+  switch (avatarId) {
+    case 'penguin': return 120;
+    case 'flamingo': return 80;
+    case 'red': return 60;
+    case 'mighty-eagle': return 140;
+    default: return 100;
+  }
+};
+
+const getAvatarUrl = (avatarId) => {
+  const source = AVATAR_SOURCES[avatarId] || AVATAR_SOURCES.bird;
+  if (source && source.uri) return source.uri;
+  return typeof source === 'string' ? source : (source && (source.default || source));
+};
+
+const BIRD_START_X = 100; // Same as in FlappyBirdGame
 
 /**
  * Ghost Bird Component - renders other players' birds
@@ -35,23 +53,37 @@ const AVATAR_COLORS = {
 const GhostBird = ({ player, screenHeight }) => {
   if (!player || player.is_alive === false) return null;
 
-  const birdColor = AVATAR_COLORS[player.avatar] || '#FFD700';
+  const avatarId = player.avatar || 'bird';
+  const avatarSource = AVATAR_SOURCES[avatarId] || AVATAR_SOURCES.bird;
+  const birdSize = getBirdSize(avatarId);
+
   const birdY = player.bird_y !== null && player.bird_y !== undefined 
     ? player.bird_y 
     : screenHeight / 2; // Default position if not set
 
+  const rotation = player.rotation !== undefined ? player.rotation : 0;
+
   return (
     <View
       style={[
-        styles.ghostBird,
+        styles.ghostBirdContainer,
         {
+          width: birdSize,
+          height: birdSize,
           left: BIRD_START_X,
           top: birdY,
+          transform: [{ rotate: `${rotation}deg` }],
         },
       ]}
     >
-      <View style={[styles.birdCircle, { backgroundColor: birdColor }]} />
-      <Text style={styles.playerNameLabel}>{player.player_name || 'Player'}</Text>
+      <Image
+        source={avatarSource}
+        style={styles.ghostBirdImage}
+        resizeMode="contain"
+      />
+      <View style={styles.playerNameLabelContainer}>
+        <Text style={styles.playerNameLabel}>{player.player_name || 'Player'}</Text>
+      </View>
     </View>
   );
 };
@@ -66,6 +98,10 @@ const MultiplayerFlappyBirdGame = ({ roomId, localUserId, onGameEnd, onBack }) =
   const channelRef = useRef(null);
   const scoreUpdateTimeoutRef = useRef(null);
   const gameStateRef = useRef('playing');
+  
+  const scoreRef = useRef(0);
+  const isAliveRef = useRef(true);
+  const lastBroadcastTimeRef = useRef(0);
   const screenHeight = Dimensions.get('window').height;
 
   useEffect(() => {
@@ -74,9 +110,13 @@ const MultiplayerFlappyBirdGame = ({ roomId, localUserId, onGameEnd, onBack }) =
     loadRoomSeed();
     loadPlayers();
 
-    // Subscribe to player changes via Realtime
+    // Subscribe to player changes via Realtime with Broadcast enabled
     const playersChannel = supabase
-      .channel(`multiplayer-players:${roomId}`)
+      .channel(`multiplayer-players:${roomId}`, {
+        config: {
+          broadcast: { self: false }
+        }
+      })
       .on(
         'postgres_changes',
         {
@@ -99,6 +139,23 @@ const MultiplayerFlappyBirdGame = ({ roomId, localUserId, onGameEnd, onBack }) =
           }
         }
       )
+      .on('broadcast', { event: 'position' }, ({ payload }) => {
+        // payload has: { userId, birdY, rotation, score, isAlive }
+        setPlayers((prevPlayers) => {
+          return prevPlayers.map((p) => {
+            if (p.user_id === payload.userId) {
+              return {
+                ...p,
+                bird_y: payload.birdY,
+                rotation: payload.rotation ?? 0,
+                score: payload.score ?? p.score,
+                is_alive: payload.isAlive ?? p.is_alive
+              };
+            }
+            return p;
+          });
+        });
+      })
       .subscribe();
 
     channelRef.current = playersChannel;
@@ -148,13 +205,7 @@ const MultiplayerFlappyBirdGame = ({ roomId, localUserId, onGameEnd, onBack }) =
     }
   };
 
-  /**
-   * Sync local score to Supabase (debounced)
-   */
   const syncScore = useCallback((score) => {
-    setLocalScore(score);
-
-    // Debounce score updates (don't broadcast every frame)
     if (scoreUpdateTimeoutRef.current) {
       clearTimeout(scoreUpdateTimeoutRef.current);
     }
@@ -176,11 +227,91 @@ const MultiplayerFlappyBirdGame = ({ roomId, localUserId, onGameEnd, onBack }) =
   }, [roomId, localUserId]);
 
   /**
-   * Sync death event to Supabase
+   * Handle local score changes and broadcast
    */
-  const syncDeath = useCallback(async (birdY) => {
+  const handleScoreChange = useCallback((score) => {
+    scoreRef.current = score;
+    setLocalScore(score);
+
+    setPlayers((prevPlayers) => {
+      return prevPlayers.map((p) => {
+        if (p.user_id === localUserId) {
+          return { ...p, score: score };
+        }
+        return p;
+      });
+    });
+
+    if (channelRef.current) {
+      channelRef.current.send({
+        type: 'broadcast',
+        event: 'position',
+        payload: {
+          userId: localUserId,
+          birdY: localBirdY,
+          score: score,
+          isAlive: isAliveRef.current
+        }
+      });
+    }
+
+    syncScore(score);
+  }, [localUserId, localBirdY, syncScore]);
+
+  /**
+   * Handle local position/rotation changes and broadcast
+   */
+  const handleBirdYChange = useCallback((birdY, rotation) => {
+    setLocalBirdY(birdY);
+
+    const now = Date.now();
+    if (now - lastBroadcastTimeRef.current >= 50) {
+      lastBroadcastTimeRef.current = now;
+      if (channelRef.current) {
+        channelRef.current.send({
+          type: 'broadcast',
+          event: 'position',
+          payload: {
+            userId: localUserId,
+            birdY: birdY,
+            rotation: rotation,
+            score: scoreRef.current,
+            isAlive: isAliveRef.current
+          }
+        });
+      }
+    }
+  }, [localUserId]);
+
+  /**
+   * Handle local death and broadcast
+   */
+  const handleDeath = useCallback(async (birdY) => {
     try {
       setLocalIsAlive(false);
+      isAliveRef.current = false;
+
+      setPlayers((prevPlayers) => {
+        return prevPlayers.map((p) => {
+          if (p.user_id === localUserId) {
+            return { ...p, is_alive: false, bird_y: birdY };
+          }
+          return p;
+        });
+      });
+
+      if (channelRef.current) {
+        channelRef.current.send({
+          type: 'broadcast',
+          event: 'position',
+          payload: {
+            userId: localUserId,
+            birdY: birdY,
+            score: scoreRef.current,
+            isAlive: false
+          }
+        });
+      }
 
       await supabase
         .from('room_players')
@@ -196,26 +327,20 @@ const MultiplayerFlappyBirdGame = ({ roomId, localUserId, onGameEnd, onBack }) =
     }
   }, [roomId, localUserId]);
 
-  /**
-   * Sync bird position on flap (optional - can be throttled heavily)
-   */
-  const syncPosition = useCallback(async (birdY) => {
-    setLocalBirdY(birdY);
-    // Optionally sync position (throttled heavily to avoid spam)
-    // For now, we sync score and is_alive only
-  }, []);
-
   // Get other players (exclude local player)
   const otherPlayers = players.filter(p => p.user_id !== localUserId);
   const localPlayer = players.find(p => p.user_id === localUserId);
 
   return (
     <View style={styles.container}>
-      {/* Render FlappyBirdGame normally - NO modifications */}
+      {/* Render FlappyBirdGame normally */}
       <FlappyBirdGame 
-        avatarUrl={null} // Multiplayer uses colors, not URLs
-        avatarId={localPlayer?.avatar || 'yellow'}
+        avatarUrl={getAvatarUrl(localPlayer?.avatar || 'bird')}
+        avatarId={localPlayer?.avatar || 'bird'}
         seededRandom={seededRandom} // Pass seeded random for synchronized coin generation
+        onScoreChange={handleScoreChange}
+        onBirdYChange={handleBirdYChange}
+        onDeath={handleDeath}
       />
 
       {/* Overlay: Render other players' ghost birds */}
@@ -228,6 +353,58 @@ const MultiplayerFlappyBirdGame = ({ roomId, localUserId, onGameEnd, onBack }) =
             screenHeight={screenHeight}
           />
         ))}
+      </View>
+
+      {/* Live Scoreboard Overlay */}
+      <View style={styles.scoreboardContainer}>
+        <Text style={styles.scoreboardTitle}>LEADERBOARD</Text>
+        {[...players]
+          .sort((a, b) => {
+            if (b.score !== a.score) {
+              return b.score - a.score;
+            }
+            if (a.is_alive && !b.is_alive) return -1;
+            if (!a.is_alive && b.is_alive) return 1;
+            return 0;
+          })
+          .map((player, index) => {
+            const isSelf = player.user_id === localUserId;
+            const avatarId = player.avatar || 'bird';
+            const avatarSource = AVATAR_SOURCES[avatarId] || AVATAR_SOURCES.bird;
+            
+            return (
+              <View 
+                key={player.id} 
+                style={[
+                  styles.scoreboardRow,
+                  isSelf && styles.scoreboardRowSelf
+                ]}
+              >
+                <Text style={styles.scoreboardRank}>#{index + 1}</Text>
+                <Image 
+                  source={avatarSource} 
+                  style={styles.scoreboardAvatar}
+                  resizeMode="contain"
+                />
+                <Text 
+                  numberOfLines={1} 
+                  style={[
+                    styles.scoreboardName,
+                    isSelf && styles.scoreboardNameSelf
+                  ]}
+                >
+                  {player.player_name || 'Player'}
+                </Text>
+                <View style={styles.statusAndScore}>
+                  <View style={[
+                    styles.statusDot,
+                    { backgroundColor: player.is_alive ? '#4CAF50' : '#F44336' }
+                  ]} />
+                  <Text style={styles.scoreboardScore}>{player.score || 0}</Text>
+                </View>
+              </View>
+            );
+          })}
       </View>
     </View>
   );
@@ -247,32 +424,99 @@ const styles = StyleSheet.create({
     zIndex: 500, // Above game but below UI
     pointerEvents: 'box-none', // Don't intercept touches
   },
-  ghostBird: {
+  ghostBirdContainer: {
     position: 'absolute',
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-    opacity: 0.7, // Semi-transparent for ghost birds
+    backgroundColor: 'transparent',
+    overflow: 'visible',
+    opacity: 0.5, // Semi-transparent for ghost birds
   },
-  birdCircle: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    borderWidth: 2,
-    borderColor: '#FFFFFF',
+  ghostBirdImage: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: 'transparent',
   },
-  playerNameLabel: {
+  playerNameLabelContainer: {
     position: 'absolute',
     top: -20,
-    fontSize: 10,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+  },
+  playerNameLabel: {
+    fontSize: 12,
     color: '#FFFFFF',
-    fontWeight: '600',
+    fontWeight: 'bold',
     textShadowColor: '#000000',
     textShadowOffset: { width: 1, height: 1 },
     textShadowRadius: 2,
-    minWidth: 60,
     textAlign: 'center',
+  },
+  scoreboardContainer: {
+    position: 'absolute',
+    top: 110, // Below the userBar
+    right: 15,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    borderRadius: 12,
+    padding: 12,
+    width: 200,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+    zIndex: 1000,
+  },
+  scoreboardTitle: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#FFD700', // Gold color for retro title
+    textAlign: 'center',
+    marginBottom: 8,
+    letterSpacing: 1,
+  },
+  scoreboardRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 5,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  scoreboardRowSelf: {
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    borderRadius: 6,
+    paddingHorizontal: 4,
+  },
+  scoreboardRank: {
+    color: '#AAA',
+    fontSize: 11,
+    marginRight: 6,
+    fontWeight: '600',
+  },
+  scoreboardAvatar: {
+    width: 20,
+    height: 20,
+    marginRight: 6,
+  },
+  scoreboardName: {
+    color: '#FFF',
+    fontSize: 12,
+    flex: 1,
+  },
+  scoreboardNameSelf: {
+    fontWeight: 'bold',
+    color: '#FFF',
+  },
+  statusAndScore: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  statusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    marginRight: 6,
+  },
+  scoreboardScore: {
+    color: '#FFF',
+    fontSize: 12,
+    fontWeight: 'bold',
   },
 });
 
