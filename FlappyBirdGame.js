@@ -86,6 +86,9 @@ const FlappyBirdGame = ({
   onScoreChange,
   onBirdYChange,
   onDeath,
+  onStateChange,
+  forceGameOver,
+  isMultiplayer = false,
 }) => {
   // Get screen dimensions for responsive design
   const screenData = Dimensions.get('window');
@@ -147,6 +150,23 @@ const FlappyBirdGame = ({
       onScoreChange(score);
     }
   }, [score, onScoreChange]);
+
+  // Notify parent of game state changes
+  useEffect(() => {
+    if (typeof onStateChange === 'function') {
+      onStateChange(gameState);
+    }
+  }, [gameState, onStateChange]);
+
+  // Handle force game over trigger from parent (multiplayer sole survivor rule)
+  useEffect(() => {
+    if (forceGameOver && gameState === 'playing') {
+      setGameState('hit');
+      if (typeof onDeath === 'function') {
+        onDeath(birdPosition.y);
+      }
+    }
+  }, [forceGameOver, gameState, onDeath, birdPosition.y]);
 
   // Refs to track animation frame and game loop
   const gameLoopRef = useRef(null);
@@ -850,7 +870,11 @@ const FlappyBirdGame = ({
 
         {/* Render game over screen */}
         {gameState === 'gameOver' && (
-          <GameOver score={score} onRestart={handleRestart} />
+          <GameOver 
+            score={score} 
+            onRestart={handleRestart} 
+            isMultiplayer={isMultiplayer || seededRandom !== null} 
+          />
         )}
       </View>
     </TouchableWithoutFeedback>

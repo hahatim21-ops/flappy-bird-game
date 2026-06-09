@@ -10,7 +10,7 @@ import { View, Text, StyleSheet, TouchableOpacity, Platform } from 'react-native
  * - score: number - The final score
  * - onRestart: function - Callback function to restart the game
  */
-const GameOver = ({ score, onRestart }) => {
+const GameOver = ({ score, onRestart, isMultiplayer = false }) => {
   const [highScore, setHighScore] = useState(0);
   const [isNewHighScore, setIsNewHighScore] = useState(false);
 
@@ -97,9 +97,11 @@ const GameOver = ({ score, onRestart }) => {
 
       {/* Buttons */}
       <View style={styles.buttonContainer}>
-        <TouchableOpacity style={styles.playButton} onPress={onRestart}>
-          <Text style={styles.buttonText}>PLAY</Text>
-        </TouchableOpacity>
+        {!isMultiplayer && (
+          <TouchableOpacity style={styles.playButton} onPress={onRestart}>
+            <Text style={styles.buttonText}>PLAY</Text>
+          </TouchableOpacity>
+        )}
         <TouchableOpacity 
           style={styles.shareButton} 
           onPress={() => {
