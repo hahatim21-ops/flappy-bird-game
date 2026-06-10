@@ -15,13 +15,17 @@ module.exports = async function (env, argv) {
     })
   );
 
-  // Copy login background as-is to preserve original image quality
+  // Copy backgrounds as-is to preserve original image quality
   config.plugins.push(
     new CopyWebpackPlugin({
       patterns: [
         {
           from: path.resolve(__dirname, 'public/login-background.png'),
           to: 'login-background.png',
+        },
+        {
+          from: path.resolve(__dirname, 'public/multiplayer-background.png'),
+          to: 'multiplayer-background.png',
         },
       ],
     })

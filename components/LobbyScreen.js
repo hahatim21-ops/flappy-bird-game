@@ -14,8 +14,14 @@ import {
   TextInput,
   Alert,
   ActivityIndicator,
+  ImageBackground,
+  Platform,
 } from 'react-native';
 import { supabase } from '../lib/supabase';
+
+const multiplayerBackground = Platform.OS === 'web'
+  ? { uri: '/multiplayer-background.png' }
+  : require('../assets/multiplayer-background.png');
 
 const getPlayerName = (user) =>
   user.user_metadata?.player_name ||
@@ -272,7 +278,13 @@ const LobbyScreen = ({ onJoinRoom, onBack }) => {
   const isAnyLoading = creating || joining;
 
   return (
-    <View style={styles.container}>
+    <ImageBackground
+      source={multiplayerBackground}
+      style={styles.container}
+      imageStyle={styles.backgroundImage}
+      resizeMode="cover"
+    >
+      <View style={styles.overlay} />
       <View style={styles.content}>
         <Text style={styles.title}>Multiplayer Flappy Bird</Text>
         <Text style={styles.subtitle}>Play with friends!</Text>
@@ -334,7 +346,7 @@ const LobbyScreen = ({ onJoinRoom, onBack }) => {
           </TouchableOpacity>
         )}
       </View>
-    </View>
+    </ImageBackground>
   );
 };
 
@@ -345,6 +357,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
+  },
+  overlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.2)',
+  },
+  backgroundImage: {
+    width: '100%',
+    height: '100%',
   },
   content: {
     backgroundColor: '#FFFFFF',
